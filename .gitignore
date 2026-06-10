@@ -15,6 +15,9 @@ frontend/dist/
 # Build artifacts
 assets/dist/
 
+# Release output
+final/
+
 # IDE
 .vscode/
 .idea/
