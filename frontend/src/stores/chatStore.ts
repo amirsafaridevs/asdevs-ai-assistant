@@ -50,6 +50,7 @@ export const useChatStore = defineStore('chat', () => {
   const sessionId = ref<string>(generateSessionId());
   const messages = ref<ChatMessage[]>([]);
   const loading = ref(false);
+  const statusMessage = ref('');
 
   const lastMessage = computed(() => {
     return messages.value.length > 0
@@ -130,6 +131,7 @@ export const useChatStore = defineStore('chat', () => {
     sessionId,
     messages,
     loading,
+    statusMessage,
     lastMessage,
     addMessage,
     updateMessage,

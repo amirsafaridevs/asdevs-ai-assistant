@@ -20,12 +20,11 @@
     <header class="asdevs-header">
       <div class="asdevs-avatar">
         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L9.5 9.5L2 12L9.5 14.5L12 22L14.5 14.5L22 12L14.5 9.5L12 2Z" fill="white" />
+          <path d="M12 2L9.5 9.5L2 12L9.5 14.5L12 22L14.5 14.5L22 12L14.5 9.5L12 2Z" />
         </svg>
       </div>
       <div class="asdevs-header-info">
         <div class="asdevs-header-title">ASDevs AI Assistant</div>
-        <div class="asdevs-header-status" :style="{ color: statusColor }">{{ statusText }}</div>
       </div>
       <div class="asdevs-header-actions">
         <button
@@ -64,27 +63,34 @@
         <span>Loading WordPress context…</span>
       </div>
       <template v-else>
-        <textarea
-          ref="inputEl"
-          class="asdevs-input"
-          v-model="userInput"
-          @keydown.enter.exact.prevent="handleSendMessage"
-          @keydown.enter.shift.exact="userInput += '\n'"
-          placeholder="Ask me anything about WordPress..."
-          rows="1"
-          :disabled="chatStore.loading"
-          aria-label="Type your message"
-        ></textarea>
-        <button
-          class="asdevs-send-btn"
-          @click="handleSendMessage"
-          :disabled="!userInput.trim() || chatStore.loading"
-          aria-label="Send message"
-        >
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-          </svg>
-        </button>
+        <!-- Activity status indicator -->
+        <div v-if="chatStore.statusMessage" class="asdevs-input-status">
+          <span class="asdevs-input-status-dots"><span></span><span></span><span></span></span>
+          <span class="asdevs-input-status-text">{{ chatStore.statusMessage }}</span>
+        </div>
+        <div class="asdevs-input-row">
+          <textarea
+            ref="inputEl"
+            class="asdevs-input"
+            v-model="userInput"
+            @keydown.enter.exact.prevent="handleSendMessage"
+            @keydown.enter.shift.exact="userInput += '\n'"
+            placeholder="Ask me anything about WordPress..."
+            rows="1"
+            :disabled="chatStore.loading"
+            aria-label="Type your message"
+          ></textarea>
+          <button
+            class="asdevs-send-btn"
+            @click="handleSendMessage"
+            :disabled="!userInput.trim() || chatStore.loading"
+            aria-label="Send message"
+          >
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </div>
       </template>
     </div>
   </div>
@@ -110,18 +116,6 @@ const showNewChatConfirm = ref(false);
 defineEmits<{
   close: [];
 }>();
-
-const statusText = computed(() => {
-  if (chatStore.loading) return 'Thinking...';
-  if (navStore.redirectPending) return 'Navigating...';
-  if (contextStore.loading) return 'Loading context...';
-  return 'Ready to help';
-});
-
-const statusColor = computed(() => {
-  if (chatStore.loading || navStore.redirectPending) return 'var(--asdevs-warning, #FF9F0A)';
-  return 'var(--asdevs-success, #34C759)';
-});
 
 const contextChips = computed(() => {
   const chips: Array<{ label: string; value?: string; tooltip?: string; icon?: string }> = [];

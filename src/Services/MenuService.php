@@ -7,6 +7,12 @@ namespace ASDevs\AIAssistant\Services;
 class MenuService
 {
     /**
+     * Maximum depth for recursive submenu tree building.
+     * Prevents infinite recursion from circular submenu references.
+     */
+    private const MAX_SUBMENU_DEPTH = 10;
+
+    /**
      * Get normalized admin menu tree.
      *
      * During REST API requests, the global $menu array may not be populated
@@ -14,43 +20,59 @@ class MenuService
      */
     public function getMenus(): array
     {
-        global $menu, $submenu;
+        try {
+            global $menu;
 
-        // Ensure the admin menu is built — during REST API requests it may not be.
-        // This is safe to call multiple times because add_action hooks are
-        // only fired once and the globals persist for the request lifetime.
-        if (!is_array($menu) || empty($menu)) {
-            $this->initializeAdminMenu();
-        }
-
-        if (!is_array($menu)) {
-            return [];
-        }
-
-        $items = [];
-
-        foreach ($menu as $item) {
-            if (!is_array($item) || empty($item[0]) || empty($item[2])) {
-                continue;
+            // Ensure the admin menu is built — during REST API requests it may not be.
+            // This is safe to call multiple times because add_action hooks are
+            // only fired once and the globals persist for the request lifetime.
+            if (!is_array($menu) || empty($menu)) {
+                $this->initializeAdminMenu();
             }
 
-            $menuTitle = $this->stripTags($item[0]);
-            $menuSlug  = $item[2];
-            $menuUrl   = $this->buildUrl($menuSlug);
+            if (!is_array($menu)) {
+                return [];
+            }
 
-            // Recursively build submenu tree — supports deeply nested submenus
-            // that some plugins add (e.g., submenu → submenu → submenu)
-            $subItems = $this->buildSubmenuTree($menuSlug);
+            // Track visited slugs to prevent infinite recursion from circular
+            // submenu references that some plugins accidentally create.
+            $visited = [];
+            $items   = [];
 
-            $items[] = [
-                'title'    => $menuTitle,
-                'slug'     => $menuSlug,
-                'url'      => $menuUrl,
-                'children' => $subItems,
-            ];
+            foreach ($menu as $menuSlug => $item) {
+                if (!is_array($item) || empty($item[0]) || empty($item[2])) {
+                    continue;
+                }
+
+                $menuTitle = $this->stripTags($item[0]);
+                $menuSlug  = $item[2];
+                $menuUrl   = $this->buildUrl($menuSlug);
+
+                // Mark this top-level slug as visited before recursing
+                $visited[$menuSlug] = true;
+
+                // Recursively build submenu tree — supports deeply nested submenus
+                // that some plugins add (e.g., submenu → submenu → submenu)
+                $subItems = $this->buildSubmenuTree($menuSlug, $visited, 1);
+
+                $items[] = [
+                    'title'    => $menuTitle,
+                    'slug'     => $menuSlug,
+                    'url'      => $menuUrl,
+                    'children' => $subItems,
+                ];
+            }
+
+            return $items;
+        } catch (\Throwable $e) {
+            // If anything goes wrong during menu building (e.g., a plugin
+            // throws during admin_menu hook), return an empty array so the
+            // REST endpoint still responds instead of returning a 500 error.
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('ASDevs AI Assistant: Failed to build menu tree: ' . $e->getMessage());
+            }
+            return [];
         }
-
-        return $items;
     }
 
     /**
@@ -60,12 +82,20 @@ class MenuService
      * walks the $submenu array recursively so that deeply nested submenus
      * (e.g., WooCommerce → Settings → Advanced → Features) are fully
      * represented in the output.
+     *
+     * @param array<string, bool> $visited Map of already-processed slugs to prevent cycles.
+     * @param int                 $depth   Current recursion depth.
      */
-    private function buildSubmenuTree(string $parentSlug): array
+    private function buildSubmenuTree(string $parentSlug, array &$visited, int $depth): array
     {
         global $submenu;
 
         $items = [];
+
+        // Safety valve: stop recursing if we've gone too deep
+        if ($depth > self::MAX_SUBMENU_DEPTH) {
+            return $items;
+        }
 
         if (!isset($submenu[$parentSlug]) || !is_array($submenu[$parentSlug])) {
             return $items;
@@ -80,8 +110,14 @@ class MenuService
             $subSlug  = $sub[2];
             $subUrl   = $this->buildUrl($subSlug);
 
-            // Recurse: check if this submenu item has its own children
-            $children = $this->buildSubmenuTree($subSlug);
+            // Cycle detection: if we've already visited this slug, don't recurse
+            // into it again. Some plugins create circular submenu references
+            // (e.g., A → B → A) which would cause infinite recursion.
+            $children = [];
+            if (!isset($visited[$subSlug])) {
+                $visited[$subSlug] = true;
+                $children = $this->buildSubmenuTree($subSlug, $visited, $depth + 1);
+            }
 
             $items[] = [
                 'title'    => $subTitle,
@@ -104,7 +140,7 @@ class MenuService
      */
     private function initializeAdminMenu(): void
     {
-        global $menu, $submenu;
+        global $menu, $submenu, $admin_page_hooks, $_wp_submenu_nopriv;
 
         // Ensure globals are initialized as arrays (WordPress sets them in wp-settings.php,
         // but during REST requests they may be null instead of empty arrays)
@@ -114,9 +150,21 @@ class MenuService
         if (!is_array($submenu)) {
             $submenu = [];
         }
+        if (!is_array($admin_page_hooks)) {
+            $admin_page_hooks = [];
+        }
+        if (!is_array($_wp_submenu_nopriv)) {
+            $_wp_submenu_nopriv = [];
+        }
 
-        // Ensure admin API functions are available
+        // Ensure admin menu API functions are available.
+        // add_menu_page() and friends are in wp-admin/includes/plugin.php.
+        // We also load the general admin includes to cover any other functions
+        // that menu.php or plugins may reference during admin_menu hook.
         if (!function_exists('add_menu_page')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+        if (!function_exists('get_plugin_page_hookname')) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
 
@@ -126,19 +174,36 @@ class MenuService
         // This file is normally only loaded during admin page renders, NOT
         // during REST requests, which is why we must include it explicitly.
         //
-        // Output buffering prevents any accidental whitespace/notices from
-        // leaking into the REST JSON response.
+        // Using output buffering prevents any accidental whitespace/notices
+        // from leaking into the REST JSON response. ob_get_clean() is safer
+        // than ob_end_clean() because it always returns a string.
         $menuFile = ABSPATH . 'wp-admin/menu.php';
         if (file_exists($menuFile)) {
             ob_start();
-            require $menuFile;
-            ob_end_clean();
+            try {
+                require $menuFile;
+            } catch (\Throwable $e) {
+                // If menu.php itself throws (unlikely but defensive), clean up
+                // the buffer and log the error.
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('ASDevs AI Assistant: Failed to load menu.php: ' . $e->getMessage());
+                }
+            } finally {
+                ob_end_clean();
+            }
         }
 
         // Fire admin_menu action so all plugins/themes register their menu pages.
         // This adds plugin-specific menus and submenus on top of the core structure.
-        // Safe to call during REST requests — hooks fire only once per request.
-        do_action('admin_menu');
+        // Wrapped in try-catch because some plugins may throw fatal errors when
+        // their admin_menu hooks fire outside of a normal admin page load.
+        try {
+            do_action('admin_menu');
+        } catch (\Throwable $e) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('ASDevs AI Assistant: Plugin error during admin_menu hook: ' . $e->getMessage());
+            }
+        }
     }
 
     /**

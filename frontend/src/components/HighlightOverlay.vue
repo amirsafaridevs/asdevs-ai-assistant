@@ -1,7 +1,7 @@
 <template>
-  <!-- This component is a bridge between the highlight service and the Vue app.
-       The actual DOM manipulation is done by the highlight service for performance,
-       but this component listens for events and can trigger highlights. -->
+  <!-- This component bridges the highlight service with the Vue app.
+       Highlights are managed by adding/removing the .asdevs-highlight CSS class
+       via highlightService.ts. This component listens for clear events. -->
   <div v-if="false">
     <!-- Placeholder - actual highlights are managed by highlightService.ts -->
   </div>

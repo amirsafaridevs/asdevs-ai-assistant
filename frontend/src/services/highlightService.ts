@@ -1,5 +1,6 @@
 /**
- * Highlight Service - Manages spotlight overlay, highlight ring, and tooltips.
+ * Highlight Service - Adds a subtle yellow border class to target elements
+ * and optionally shows a tooltip. No overlay or spotlight effect.
  * Frontend-only. No backend interaction.
  */
 
@@ -10,15 +11,16 @@ export interface HighlightOptions {
   nextStep?: string;
 }
 
+const HIGHLIGHT_CLASS = 'asdevs-highlight';
+
 let currentHighlight: {
-  overlay: HTMLDivElement;
-  cutout: HTMLDivElement;
-  ring: HTMLDivElement;
-  tooltip: HTMLDivElement;
+  element: Element;
+  tooltip: HTMLDivElement | null;
 } | null = null;
 
 /**
- * Highlight an element on the page with a spotlight effect.
+ * Highlight an element on the page by adding a CSS class.
+ * Optionally shows a tooltip with a message.
  */
 export function highlightElement(options: HighlightOptions): void {
   // Remove any existing highlight first
@@ -30,63 +32,36 @@ export function highlightElement(options: HighlightOptions): void {
     return;
   }
 
-  const rect = target.getBoundingClientRect();
-  const padding = 6;
+  // Add highlight class to the target element
+  target.classList.add(HIGHLIGHT_CLASS);
 
-  // Create spotlight overlay
-  const overlay = document.createElement('div');
-  overlay.className = 'asdevs-spotlight';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:99998;pointer-events:none;';
-
-  // Create cutout (the "hole" in the overlay)
-  const cutout = document.createElement('div');
-  cutout.className = 'asdevs-spotlight-cutout';
-  cutout.style.cssText = `
-    position: fixed;
-    left: ${rect.left - padding}px;
-    top: ${rect.top - padding}px;
-    width: ${rect.width + padding * 2}px;
-    height: ${rect.height + padding * 2}px;
-    border-radius: 8px;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
-    pointer-events: none;
-    z-index: 99999;
-    transition: all 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  `;
-
-  // Create highlight ring
-  const ring = document.createElement('div');
-  ring.className = 'asdevs-highlight-ring';
-  ring.style.cssText = `
-    position: fixed;
-    left: ${rect.left - padding}px;
-    top: ${rect.top - padding}px;
-    width: ${rect.width + padding * 2}px;
-    height: ${rect.height + padding * 2}px;
-    border: 2px solid #007AFF;
-    border-radius: 8px;
-    box-shadow: 0 0 0 4px rgba(0,122,255,0.15), 0 0 20px rgba(0,122,255,0.1);
-    pointer-events: none;
-    z-index: 100000;
-    animation: asdevs-ring-pulse 2s ease-in-out infinite;
-  `;
-
-  // Inject ring animation if not already present
-  if (!document.getElementById('asdevs-keyframes')) {
-    const style = document.createElement('style');
-    style.id = 'asdevs-keyframes';
-    style.textContent = `
-      @keyframes asdevs-ring-pulse {
-        0%, 100% { box-shadow: 0 0 0 4px rgba(0,122,255,0.15), 0 0 20px rgba(0,122,255,0.1); }
-        50% { box-shadow: 0 0 0 8px rgba(0,122,255,0.08), 0 0 30px rgba(0,122,255,0.15); }
-      }
-    `;
-    document.head.appendChild(style);
+  // Create tooltip if there's a message or title
+  let tooltip: HTMLDivElement | null = null;
+  if (options.message || options.title) {
+    tooltip = createTooltip(target, options);
   }
 
-  // Create tooltip
+  currentHighlight = { element: target, tooltip };
+
+  // Scroll target into view
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Listen for clear event
+  const clearHandler = () => clearHighlight();
+  document.addEventListener('asdevs:clearHighlight', clearHandler, { once: true });
+}
+
+/**
+ * Create a tooltip positioned near the highlighted element.
+ */
+function createTooltip(
+  target: Element,
+  options: HighlightOptions
+): HTMLDivElement {
+  const rect = target.getBoundingClientRect();
   const tooltip = document.createElement('div');
   tooltip.className = 'asdevs-tooltip';
+
   const tooltipTop = rect.bottom + 12;
   const tooltipLeft = Math.min(rect.left, window.innerWidth - 300);
 
@@ -119,7 +94,7 @@ export function highlightElement(options: HighlightOptions): void {
     -webkit-backdrop-filter: blur(20px);
   `;
 
-  // Inject tooltip animation
+  // Inject tooltip animation keyframes if not present
   if (!document.getElementById('asdevs-tooltip-keyframes')) {
     const tipStyle = document.createElement('style');
     tipStyle.id = 'asdevs-tooltip-keyframes';
@@ -132,50 +107,31 @@ export function highlightElement(options: HighlightOptions): void {
     document.head.appendChild(tipStyle);
   }
 
-  // Scroll target into view
-  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  // Append to body
-  document.body.appendChild(overlay);
-  document.body.appendChild(cutout);
-  document.body.appendChild(ring);
   document.body.appendChild(tooltip);
-
-  currentHighlight = { overlay, cutout, ring, tooltip };
-
-  // Listen for clear event
-  const clearHandler = () => clearHighlight();
-  document.addEventListener('asdevs:clearHighlight', clearHandler, { once: true });
-
-  // Click on overlay to dismiss
-  overlay.style.pointerEvents = 'auto';
-  overlay.addEventListener('click', () => {
-    clearHighlight();
-  });
+  return tooltip;
 }
 
 /**
- * Clear the current highlight and all associated elements.
+ * Clear the current highlight and remove the tooltip.
  */
 export function clearHighlight(): void {
   if (!currentHighlight) return;
 
-  const { overlay, cutout, ring, tooltip } = currentHighlight;
+  const { element, tooltip } = currentHighlight;
 
-  // Fade out
-  [overlay, cutout, ring, tooltip].forEach((el) => {
-    el.style.opacity = '0';
-    el.style.transition = 'opacity 200ms ease';
-  });
+  // Remove highlight class from the element
+  element.classList.remove(HIGHLIGHT_CLASS);
 
-  // Remove after animation
-  setTimeout(() => {
-    [overlay, cutout, ring, tooltip].forEach((el) => {
-      if (el.parentNode) {
-        el.parentNode.removeChild(el);
+  // Fade out and remove tooltip
+  if (tooltip) {
+    tooltip.style.opacity = '0';
+    tooltip.style.transition = 'opacity 200ms ease';
+    setTimeout(() => {
+      if (tooltip.parentNode) {
+        tooltip.parentNode.removeChild(tooltip);
       }
-    });
-  }, 200);
+    }, 200);
+  }
 
   currentHighlight = null;
 }

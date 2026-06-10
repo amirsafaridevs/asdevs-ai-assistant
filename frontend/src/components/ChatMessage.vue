@@ -1,12 +1,5 @@
 <template>
   <div class="asdevs-message" :class="message.role">
-    <!-- Assistant Avatar -->
-    <div v-if="message.role === 'assistant'" class="asdevs-avatar asdevs-avatar-sm">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L9.5 9.5L2 12L9.5 14.5L12 22L14.5 14.5L22 12L14.5 9.5L12 2Z" fill="white" />
-      </svg>
-    </div>
-
     <div class="asdevs-bubble">
       <!-- Message Content (rendered as markdown-like HTML) -->
       <div v-html="renderedContent"></div>
@@ -28,13 +21,6 @@
         <div class="asdevs-transition-label">Taking you to:</div>
         <div class="asdevs-transition-dest">{{ transitionDestination }}</div>
       </div>
-    </div>
-
-    <!-- User Avatar -->
-    <div v-if="message.role === 'user'" class="asdevs-avatar asdevs-avatar-sm asdevs-avatar-user">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v1.2c0 .66.54 1.2 1.2 1.2h16.8c.66 0 1.2-.54 1.2-1.2v-1.2c0-3.2-6.4-4.8-9.6-4.8z" />
-      </svg>
     </div>
   </div>
 </template>
@@ -101,22 +87,6 @@ function handleNavigate(): void {
 </script>
 
 <style scoped>
-.asdevs-avatar-sm {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  flex-shrink: 0;
-}
-
-.asdevs-avatar-user {
-  background: linear-gradient(135deg, #5856D6, #AF52DE);
-}
-
-.asdevs-avatar-sm svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* ===== Markdown Content Styles ===== */
 .asdevs-bubble :deep(h1) {
   font-size: 1.4em;

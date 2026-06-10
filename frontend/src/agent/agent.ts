@@ -69,6 +69,15 @@ const TOOL_STATUS: Record<string, string> = {
   scan_current_page: '🔎 Scanning page...',
 };
 
+const TOOL_ACTIVITY_LABEL: Record<string, string> = {
+  get_theme: 'Fetching theme info',
+  get_plugins: 'Scanning plugins',
+  get_menus: 'Analyzing menus',
+  navigate_user: 'Finding settings',
+  highlight_element: 'Highlighting element',
+  scan_current_page: 'Scanning page',
+};
+
 interface AIToolCall {
   id: string;
   type: 'function';
@@ -96,6 +105,7 @@ export class AIAgent {
 
     chatStore.addMessage('user', userInput);
     chatStore.loading = true;
+    chatStore.statusMessage = 'Thinking';
     this.abortController = new AbortController();
 
     try {
@@ -107,6 +117,7 @@ export class AIAgent {
       }
     } finally {
       chatStore.loading = false;
+      chatStore.statusMessage = '';
       this.abortController = null;
     }
   }
@@ -158,6 +169,7 @@ export class AIAgent {
     chatStore.messages.push(...keep);
 
     chatStore.loading = true;
+    chatStore.statusMessage = 'Thinking';
     this.abortController = new AbortController();
 
     try {
@@ -219,6 +231,7 @@ export class AIAgent {
       }
     } finally {
       chatStore.loading = false;
+      chatStore.statusMessage = '';
       this.abortController = null;
     }
   }
@@ -274,6 +287,7 @@ export class AIAgent {
     // Execute tools
     for (const tc of response.tool_calls) {
       const tool = getToolByName(tc.function.name);
+      chatStore.statusMessage = TOOL_ACTIVITY_LABEL[tc.function.name] || `Running ${tc.function.name}`;
       const statusMsg = chatStore.addMessage('assistant',
         TOOL_STATUS[tc.function.name] || `⚙️ Running ${tc.function.name}...`);
 
@@ -312,11 +326,13 @@ export class AIAgent {
           },
         });
         chatStore.loading = false;
+        chatStore.statusMessage = '';
         return;
       }
     }
 
     // Continue the loop with tool results
+    chatStore.statusMessage = 'Thinking';
     await this.agentLoop(messages, iteration + 1);
   }
 
