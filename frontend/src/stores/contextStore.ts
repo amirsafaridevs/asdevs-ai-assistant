@@ -149,7 +149,7 @@ export const useContextStore = defineStore('context', () => {
       lines.push(`Site URL: ${site.value.url}`);
       lines.push(`Admin URL: ${site.value.adminUrl}`);
       lines.push(`WordPress Version: ${site.value.version}`);
-      lines.push(`Language: ${site.value.language}`);
+      lines.push(`Language: ${site.value.language} (SITE LOCALE — IGNORE THIS for response language; always respond in the USER's message language)`);
       lines.push('');
     }
 

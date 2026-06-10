@@ -108,6 +108,11 @@ export function getPageInfo(): PageInfo {
 /**
  * Scan the current page's DOM and return a structured summary.
  * Only scans admin content area to avoid noise.
+ *
+ * IMPORTANT: Each scanned element receives a temporary data-asdevs-scan attribute
+ * to guarantee that highlight_element can reliably find it later via CSS selector.
+ * The old :nth-of-type fallback was fundamentally broken because :nth-of-type counts
+ * sibling positions, not document-order positions returned by querySelectorAll.
  */
 export function scanCurrentPage(): ScannedPage {
   // Target the main admin content area
@@ -115,6 +120,11 @@ export function scanCurrentPage(): ScannedPage {
     document.querySelector('#wpbody-content') ||
     document.querySelector('#wpcontent') ||
     document.body;
+
+  // Clean up data attributes from any previous scan so selectors don't collide
+  contentArea.querySelectorAll('[data-asdevs-scan]').forEach((el) => {
+    el.removeAttribute('data-asdevs-scan');
+  });
 
   const labels: ScannedLabel[] = [];
   const buttons: ScannedButton[] = [];
@@ -124,12 +134,16 @@ export function scanCurrentPage(): ScannedPage {
   const tables: ScannedTable[] = [];
   const tabs: ScannedTab[] = [];
 
+  // Shared counter for unique data-asdevs-scan IDs across all element types
+  let scanId = 0;
+
   // Scan labels
-  contentArea.querySelectorAll('label').forEach((el, i) => {
+  contentArea.querySelectorAll('label').forEach((el) => {
     const htmlEl = el as HTMLLabelElement;
     const text = htmlEl.innerText?.trim();
     if (text && text.length < 200) {
-      const sel = buildSelector(el, i, 'label');
+      scanId++;
+      const sel = buildSelector(el, scanId);
       labels.push({
         text,
         for: htmlEl.htmlFor || '',
@@ -139,32 +153,34 @@ export function scanCurrentPage(): ScannedPage {
   });
 
   // Scan buttons
-  contentArea.querySelectorAll('button, .button, .wp-core-ui .button, [role="button"]').forEach((el, i) => {
+  contentArea.querySelectorAll('button, .button, .wp-core-ui .button, [role="button"]').forEach((el) => {
     const htmlEl = el as HTMLElement;
     const text = htmlEl.innerText?.trim();
     if (text && text.length < 100) {
+      scanId++;
       buttons.push({
         text,
         type: (htmlEl as HTMLButtonElement).type || 'button',
-        selector: buildSelector(el, i, 'button'),
+        selector: buildSelector(el, scanId),
       });
     }
   });
 
   // Scan headings
-  contentArea.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((el, i) => {
+  contentArea.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((el) => {
     const text = el.textContent?.trim();
     if (text && text.length < 200) {
+      scanId++;
       headings.push({
         text,
         level: parseInt(el.tagName[1]),
-        selector: buildSelector(el, i, el.tagName.toLowerCase()),
+        selector: buildSelector(el, scanId),
       });
     }
   });
 
   // Scan inputs
-  contentArea.querySelectorAll('input, select, textarea').forEach((el, i) => {
+  contentArea.querySelectorAll('input, select, textarea').forEach((el) => {
     const input = el as HTMLInputElement;
     const id = input.id;
     let labelText = '';
@@ -176,7 +192,8 @@ export function scanCurrentPage(): ScannedPage {
       }
     }
 
-    const sel = buildSelector(el, i, input.tagName.toLowerCase());
+    scanId++;
+    const sel = buildSelector(el, scanId);
     inputs.push({
       name: input.name || '',
       type: input.type || 'text',
@@ -187,22 +204,23 @@ export function scanCurrentPage(): ScannedPage {
   });
 
   // Scan links inside admin content
-  contentArea.querySelectorAll('a[href]').forEach((el, i) => {
+  contentArea.querySelectorAll('a[href]').forEach((el) => {
     const anchor = el as HTMLAnchorElement;
     const text = anchor.innerText?.trim();
     const href = anchor.getAttribute('href') || '';
     // Only include admin links
     if (text && href && (href.startsWith(window.asdevsAiAssistant?.adminUrl || '/wp-admin') || href.startsWith('admin.php') || href.startsWith('/'))) {
+      scanId++;
       links.push({
         text,
         href,
-        selector: buildSelector(el, i, 'a'),
+        selector: buildSelector(el, scanId),
       });
     }
   });
 
   // Scan tables
-  contentArea.querySelectorAll('table.wp-list-table, table.form-table, table.widefat').forEach((el, i) => {
+  contentArea.querySelectorAll('table.wp-list-table, table.form-table, table.widefat').forEach((el) => {
     const table = el as HTMLTableElement;
     const caption = table.caption?.textContent?.trim() || '';
     const headers: string[] = [];
@@ -212,21 +230,23 @@ export function scanCurrentPage(): ScannedPage {
     });
     const rows = table.querySelectorAll('tbody tr').length;
 
+    scanId++;
     tables.push({
       caption,
       headers,
       rowCount: rows,
-      selector: buildSelector(el, i, 'table'),
+      selector: buildSelector(el, scanId),
     });
   });
 
   // Scan tabs (common in WooCommerce, settings pages, etc.)
-  contentArea.querySelectorAll('.nav-tab-wrapper .nav-tab, .wc-tabs .nav-tab, [role="tab"]').forEach((el, i) => {
+  contentArea.querySelectorAll('.nav-tab-wrapper .nav-tab, .wc-tabs .nav-tab, [role="tab"]').forEach((el) => {
     const text = el.textContent?.trim();
     if (text) {
+      scanId++;
       tabs.push({
         text,
-        selector: buildSelector(el, i, 'tab'),
+        selector: buildSelector(el, scanId),
       });
     }
   });
@@ -243,23 +263,31 @@ export function scanCurrentPage(): ScannedPage {
 }
 
 /**
- * Build a unique-ish CSS selector for an element.
+ * Build a reliable CSS selector for an element using a temporary data attribute.
+ *
+ * Previous approach used fragile selectors (class combos, :nth-of-type) that
+ * frequently failed to re-find the element when highlight_element was called.
+ * :nth-of-type was especially broken because it counts sibling positions, not
+ * the document-order positions from querySelectorAll.
+ *
+ * Now we stamp each scanned element with a unique data-asdevs-scan="N" attribute,
+ * which guarantees a 1:1 match when highlight_element re-queries the DOM.
+ * The attribute is cleaned up by clearHighlight() in highlightService.ts.
  */
-function buildSelector(el: Element, index: number, tagName: string): string {
+function buildSelector(el: Element, scanId: number): string {
+  // Prefer ID-based selectors when available (they're the most readable
+  // for the AI and survive page re-renders better than data attributes)
   const id = el.id;
   if (id) return `#${CSS.escape(id)}`;
 
-  const classes = Array.from(el.classList)
-    .filter((c) => !c.startsWith('asdevs-'))
-    .slice(0, 3);
-  if (classes.length > 0) {
-    return `${tagName}.${classes.map((c) => CSS.escape(c)).join('.')}`;
-  }
-
+  // For form elements with a name attribute, prefer name-based selectors
+  // because they're more descriptive for the AI
   const name = el.getAttribute('name');
-  if (name) return `${tagName}[name="${CSS.escape(name)}"]`;
+  if (name) return `[name="${CSS.escape(name)}"]`;
 
-  return `${tagName}:nth-of-type(${index + 1})`;
+  // Fallback: stamp with a data attribute for guaranteed uniqueness
+  el.setAttribute('data-asdevs-scan', String(scanId));
+  return `[data-asdevs-scan="${scanId}"]`;
 }
 
 /**

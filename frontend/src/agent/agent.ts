@@ -20,14 +20,22 @@ import { getFullPageContext } from '../services/pageScanner';
 const SYSTEM_PROMPT = `You are the ASDevs AI Assistant — an expert WordPress administrator guide embedded directly in the WordPress admin panel.
 
 === YOUR IDENTITY ===
-You are a friendly, professional, and knowledgeable WordPress GPS. Your sole purpose is to help the logged-in user navigate the WordPress admin area, locate settings, understand plugins, and configure their site. You speak the user's language fluently and adapt your tone to match theirs.
+You are a friendly, professional, and knowledgeable WordPress GPS. Your sole purpose is to help the logged-in user navigate the WordPress admin area, locate settings, understand plugins, and configure their site. You adapt your tone to match the user's style.
+
+=== ⚠️ LANGUAGE RULE — HIGHEST PRIORITY ⚠️ ===
+ALWAYS respond in the EXACT SAME LANGUAGE the user writes their message in.
+- The "Language" field in the WordPress context (e.g. "fa_IR", "en_US") is the SITE'S admin locale — IGNORE IT for your responses.
+- If the user writes in Persian → respond in Persian.
+- If the user writes in English → respond in English.
+- If the user writes in Arabic → respond in Arabic.
+- NEVER switch languages based on the WordPress site settings. ONLY follow the user's message language.
+- This rule overrides everything else. VIOLATING THIS RULE IS THE WORST POSSIBLE ERROR.
 
 === CRITICAL RULES (NEVER VIOLATE THESE) ===
 1. READ-ONLY: You CANNOT modify any settings, files, database records, or WordPress options. You cannot activate/deactivate plugins, switch themes, or execute any code.
 2. GUIDE ONLY: Your only power is navigation and explanation. You guide users TO settings, you never change them.
 3. NO FALSE CLAIMS: Never claim you can do something you cannot. Be honest about your limitations.
 4. SLUGS ONLY: When navigating, ALWAYS pass the exact relative slug from the menu (e.g. "admin.php?page=wc-settings"). NEVER construct full URLs. The backend builds the final URL.
-5. USER'S LANGUAGE: Always respond in the same language the user writes in. Match their tone — casual for casual users, technical for developers.
 
 === AVAILABLE TOOLS ===
 - get_theme: Get detailed active theme information
@@ -42,7 +50,12 @@ When a user asks "Where is X?" or "How do I find Y?":
 1. CHECK CONTEXT: You already have the full menu structure, plugin list, and theme info in your system prompt. Use it first before calling tools.
 2. FIND THE SLUG: Locate the correct admin page slug from the menu structure already provided to you.
 3. NAVIGATE: Call navigate_user with that exact slug. The backend constructs the URL.
-4. AFTER ARRIVAL: The system will scan the page and show you what's visible. Explain it to the user.
+4. AFTER ARRIVAL: The system will scan the page. Your job is to:
+   a. Call scan_current_page to get fresh page content (form fields, buttons, headings, etc.)
+   b. Identify the EXACT element the user was looking for
+   c. Call highlight_element to visually highlight it with a helpful tooltip
+   d. Provide a brief text explanation
+   ⚠️ NEVER skip the highlight step when the user asked to find something specific. Highlighting is mandatory — not optional — when the user says "where is", "find", "show me", "look for", or similar phrases.
 
 === WHEN YOU ALREADY KNOW THE ANSWER ===
 If the context already contains the information the user needs (menu structure, plugin list, theme), answer directly without calling any tools. Only call tools when you genuinely need fresh data.
@@ -57,8 +70,21 @@ const CONTINUATION_PROMPT = `=== CRITICAL: YOU ARE ALREADY ON THE TARGET PAGE ==
 Navigation is COMPLETE. The user has been successfully redirected.
 You are NOW viewing the correct WordPress admin page.
 DO NOT call navigate_user, get_menus, or get_plugins again.
-Your ONLY task is to explain what the user sees on this page.
-Respond with text only. Be helpful and concise.`;
+
+=== YOUR JOB NOW: FIND AND HIGHLIGHT THE TARGET ===
+1. First, call scan_current_page to get a fresh list of all visible form fields, buttons, headings, labels, tabs, and tables on this page.
+2. Analyze the scan results. Identify which element(s) on this page match what the user was originally looking for.
+3. Call highlight_element to visually highlight the EXACT field/button/setting the user needs. Use the selector from the scan results. Include a helpful message and title.
+4. Finally, provide a brief text explanation so the user knows where they are and what to do.
+
+=== HIGHLIGHTING RULES ===
+- ALWAYS scan the page first, then highlight. Never skip highlighting when the user asked "where is X?" or "find X".
+- If you find the exact field the user wants, highlight it IMMEDIATELY. Do not just describe it — make it glow.
+- If there are multiple candidates, highlight the best match and mention the alternatives in text.
+- If nothing matches, scan_current_page again or tell the user honestly that the field wasn't found on this page.
+- Use clear, short titles like "✅ Here it is!" and messages like "This is the [field name] setting you asked for."
+
+CRITICAL: You MUST call highlight_element when the user's question implies they are looking for a specific setting, field, button, or option. Describing it in text is NOT enough — highlight it visually.`;
 
 const TOOL_STATUS: Record<string, string> = {
   get_theme: '🔍 Fetching theme...',
@@ -125,9 +151,10 @@ export class AIAgent {
   /**
    * Called after page reload when post-navigation continuation is needed.
    *
-   * Strategy: Does NOT use the agent loop (which could trigger navigate_user again).
-   * Instead, directly fetches page info + scans the page, then sends a single
-   * completion to the AI with NO tools, so the AI can only respond with text.
+   * Strategy: Uses the agent loop but with a LIMITED set of tools:
+   * - scan_current_page (to get fresh page data with selectors)
+   * - highlight_element (to visually point out the target field)
+   * navigate_user, get_menus, get_plugins, get_theme are NOT available here.
    */
   async continueAfterNavigation(): Promise<void> {
     const chatStore = useChatStore();
@@ -173,58 +200,28 @@ export class AIAgent {
     this.abortController = new AbortController();
 
     try {
-      // STEP 1: Get complete page context (runs entirely in the browser, no backend call)
-      let pageContextText = '';
-      try {
-        const { getFullPageContext } = await import('../services/pageScanner');
-        const ctx = getFullPageContext();
-        if (ctx.contextText) {
-          pageContextText = ctx.contextText;
-        }
-      } catch {
-        pageContextText = 'Unable to scan page';
-      }
-
-      // STEP 2: Build a single-shot completion with NO tools
-      // The AI can only respond with text — it CANNOT call navigate_user
+      // Build messages with the CONTINUATION_PROMPT that instructs the AI
+      // to scan and highlight. WordPress context is included for awareness.
       const contextStore = useContextStore();
-      let systemContent = SYSTEM_PROMPT + '\n\n' +
-        CONTINUATION_PROMPT + '\n\n';
-      if (pageContextText) {
-        systemContent += 'PAGE CONTEXT (browser scan):\n' + pageContextText + '\n\n';
-      }
-      // Always include the full WordPress context
-      const ctx = contextStore.getContextSummary();
-      if (ctx) systemContent += '\n' + ctx;
+      let systemContent = SYSTEM_PROMPT + '\n\n' + CONTINUATION_PROMPT;
+
+      const wpCtx = contextStore.getContextSummary();
+      if (wpCtx) systemContent += '\n\n' + wpCtx;
       if (navStore.currentTask) systemContent += '\n\nACTIVE TASK: ' + navStore.currentTask;
 
       const messages: any[] = [{ role: 'system', content: systemContent }];
 
-      // Add cleaned conversation history
+      // Add cleaned conversation history (user + assistant text only, no tools)
       for (const msg of chatStore.messages.slice(-10)) {
         if (msg.role === 'user' || msg.role === 'assistant') {
           messages.push({ role: msg.role, content: msg.content });
         }
       }
 
-      // Call AI WITHOUT tools — single completion with streaming, no agent loop
-      const streamMsg = chatStore.addMessage('assistant', '');
-      const response = await this.callAI(messages, false, (token: string) => {
-        chatStore.updateMessage(streamMsg.id, {
-          content: (chatStore.messages.find((m) => m.id === streamMsg.id)?.content || '') + token,
-        });
-      });
-
-      const finalContent = chatStore.messages.find((m) => m.id === streamMsg.id)?.content || '';
-
-      if (response && response.content) {
-        // Streaming already filled the message — ensure final content is set
-        chatStore.updateMessage(streamMsg.id, { content: response.content });
-      } else if (!finalContent.trim()) {
-        chatStore.updateMessage(streamMsg.id, {
-          content: 'I arrived on the page. Let me know if you need help finding a specific setting.',
-        });
-      }
+      // Use the agent loop but ONLY with highlight_element and scan_current_page tools.
+      // navigate_user is NOT available, so the AI cannot trigger another redirect.
+      const { highlightElementTool, scanCurrentPageTool } = await import('./tools');
+      await this.agentLoop(messages, 0, [highlightElementTool, scanCurrentPageTool]);
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         chatStore.addMessage('assistant', `Error: ${error.message || 'Unknown'}`);
@@ -236,7 +233,7 @@ export class AIAgent {
     }
   }
 
-  private async agentLoop(messages: any[], iteration: number): Promise<void> {
+  private async agentLoop(messages: any[], iteration: number, allowedTools?: import('./tools').Tool[]): Promise<void> {
     const chatStore = useChatStore();
     if (iteration >= 5) {
       chatStore.addMessage('assistant', 'I completed several steps. Let me know if you need more help!');
@@ -248,7 +245,8 @@ export class AIAgent {
     const streamMsg = chatStore.addMessage('assistant', '');
 
     // Call AI with streaming — tokens update the message in real-time
-    const response = await this.callAI(messages, true, (token: string) => {
+    // Pass allowedTools if provided, otherwise callAI uses all available tools
+    const response = await this.callAI(messages, allowedTools, (token: string) => {
       chatStore.updateMessage(streamMsg.id, {
         content: (chatStore.messages.find((m) => m.id === streamMsg.id)?.content || '') + token,
       });
@@ -333,7 +331,7 @@ export class AIAgent {
 
     // Continue the loop with tool results
     chatStore.statusMessage = 'Thinking';
-    await this.agentLoop(messages, iteration + 1);
+    await this.agentLoop(messages, iteration + 1, allowedTools);
   }
 
   cancel(): void {
@@ -411,13 +409,16 @@ export class AIAgent {
    *
    * This is the core LangChain pattern: frontend → AI → tools → WP REST API.
    *
-   * @param messages  The messages array to send
-   * @param withTools Whether to include tool definitions (default: true). Set false for text-only responses.
-   * @param onToken   Optional callback invoked with each content token as it arrives.
+   * @param messages The messages array to send
+   * @param tools    Optional array of Tool objects to expose to the AI.
+   *                 - undefined/omitted → all availableTools (default)
+   *                 - [] (empty array) → no tools (text-only response)
+   *                 - [toolA, toolB] → only those specific tools
+   * @param onToken  Optional callback invoked with each content token as it arrives.
    */
   private async callAI(
     messages: any[],
-    withTools: boolean = true,
+    tools?: import('./tools').Tool[],
     onToken?: (token: string) => void,
   ): Promise<AIResponse | null> {
     const config = window.asdevsAiAssistant;
@@ -435,13 +436,13 @@ export class AIAgent {
       stream: true,
     };
 
-    // Only include tools if requested
-    if (withTools) {
-      const toolDefs = availableTools.map((t) => t.toFunctionDefinition());
-      if (toolDefs.length > 0) {
-        body.tools = toolDefs;
-        body.tool_choice = 'auto';
-      }
+    // Determine which tools to include
+    // undefined → all available tools; [] → no tools; [toolA, ...] → only those
+    const toolsToUse = tools !== undefined ? tools : availableTools;
+    if (toolsToUse.length > 0) {
+      const toolDefs = toolsToUse.map((t) => t.toFunctionDefinition());
+      body.tools = toolDefs;
+      body.tool_choice = 'auto';
     }
 
     const resp = await fetch(endpoint, {

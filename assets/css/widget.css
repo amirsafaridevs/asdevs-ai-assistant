@@ -677,20 +677,43 @@
 }
 
 /* ============================================
-   Highlight Class
+   Highlight — triggered via data-asdevs-ai-highlight attribute
    ============================================ */
-.asdevs-highlight {
-  outline: 2px solid #FFD60A;
-  outline-offset: 2px;
-  border-radius: 4px;
-  box-shadow: 0 0 0 6px rgba(255, 214, 10, 0.12);
-  animation: asdevs-highlight-pulse 2.2s ease-in-out infinite;
-  transition: outline 200ms ease, box-shadow 200ms ease;
+[data-asdevs-ai-highlight] {
+  /* Multi-layer approach for maximum visibility across all WP admin contexts:
+   * 1. box-shadow: inset — immune to overflow:hidden clipping on parent containers;
+   *    renders a solid yellow ring INSIDE the element's border box
+   * 2. outline — outer ring for extra emphasis (may be clipped by overflow:hidden,
+   *    but the inset shadow ensures visibility regardless)
+   * 3. box-shadow glow — external pulse effect (enhancement when not clipped)
+   *
+   * All use !important to override WordPress admin's high-specificity styles
+   * (e.g., .wp-core-ui input[type="text"], #wpcontent select, etc.)
+   */
+  box-shadow:
+    inset 0 0 0 2px #FFD60A,
+    0 0 0 6px rgba(255, 214, 10, 0.15) !important;
+  outline: 2px solid #FFD60A !important;
+  outline-offset: 0 !important;
+  border-radius: 4px !important;
+  animation: asdevs-highlight-pulse 2.2s ease-in-out infinite !important;
+  transition: outline 200ms ease, box-shadow 200ms ease !important;
+  /* Raise stacking context so the element sits above nearby positioned siblings */
+  position: relative !important;
+  z-index: 10 !important;
 }
 
 @keyframes asdevs-highlight-pulse {
-  0%, 100% { box-shadow: 0 0 0 6px rgba(255, 214, 10, 0.12); }
-  50% { box-shadow: 0 0 0 10px rgba(255, 214, 10, 0.06); }
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 2px #FFD60A,
+      0 0 0 6px rgba(255, 214, 10, 0.15);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 3px #FFC107,
+      0 0 0 12px rgba(255, 214, 10, 0.06);
+  }
 }
 
 /* Highlight tooltip */
@@ -868,7 +891,7 @@
   .asdevs-message,
   .asdevs-tooltip,
   .asdevs-floating-btn,
-  .asdevs-highlight {
+  [data-asdevs-ai-highlight] {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

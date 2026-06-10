@@ -1,7 +1,7 @@
 <template>
   <!-- This component bridges the highlight service with the Vue app.
-       Highlights are managed by adding/removing the .asdevs-highlight CSS class
-       via highlightService.ts. This component listens for clear events. -->
+       Highlights are managed by setting/removing the data-asdevs-ai-highlight
+       attribute via highlightService.ts. This component listens for clear events. -->
   <div v-if="false">
     <!-- Placeholder - actual highlights are managed by highlightService.ts -->
   </div>

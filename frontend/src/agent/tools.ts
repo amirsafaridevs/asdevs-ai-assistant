@@ -154,13 +154,28 @@ export const navigateUserTool = new Tool(
 
 export const highlightElementTool = new Tool(
   'highlight_element',
-  'Highlight a specific element on the current page to guide the user. Use after navigating to point out the exact setting.',
+  'Visually highlight a specific element on the current admin page with a glowing yellow border and tooltip. ' +
+  'MANDATORY: You MUST call this tool whenever the user asks "where is X?", "find X", "show me X", ' +
+  'or any similar query looking for a specific setting, field, button, or option. ' +
+  'Never skip highlighting — describing in text is NOT enough when the user wants to find something visually.' +
+  '\n\nCRITICAL — CHOOSING THE RIGHT SELECTOR:' +
+  '\n- Prefer targeting a VISIBLE PARENT CONTAINER (div, form row, field wrapper, card, panel) instead of the exact element. ' +
+  'The highlight ring needs enough visible area to be seen — at least 10px wide/tall.' +
+  '\n- For select2/SelectWoo/Chosen dropdowns: the original <select> is hidden! Target the visible .select2-container instead, ' +
+  'or the parent .form-field / .cmb-row wrapper div that contains the whole field.' +
+  '\n- For tiny elements (hidden inputs, small icons, inline spans): walk UP one or two levels to a parent div that provides a meaningful visual area.' +
+  '\n- When scan_current_page returns a selector for a label or input, prefer the parent form row (e.g., tr.form-field, div.cmb-row, .form-table tr) ' +
+  'so the entire field area lights up, not just the tiny input box.' +
+  '\n- Good selectors look like: "#wpbody-content .form-table tr", "div.cmb-row", ".woocommerce-input-wrapper", "#postbox-container-2 .postbox".' +
+  '\n- Bad selectors: hidden <select> elements, 0×0px containers, individual <input> elements that are only 20px tall.' +
+  '\n\nIf unsure, use a broader parent selector — the system will automatically narrow to the best visible parent, ' +
+  'but starting from a good parent gives the most reliable result.',
   {
     type: 'object',
     properties: {
-      selector: { type: 'string', description: 'CSS selector of the element to highlight' },
-      message: { type: 'string', description: 'Instruction for the user about this element' },
-      title: { type: 'string', description: 'Short title for the tooltip' },
+      selector: { type: 'string', description: 'CSS selector for the element or parent container to highlight. Prefer a visible parent wrapper (div, form row, field container) over tiny/hidden elements. For select2/SelectWoo, use .select2-container or the parent .form-field div instead of the hidden <select>.' },
+      message: { type: 'string', description: 'Helpful instruction for the user about this element (e.g. "This is where you change your site title. Type your new title here.")' },
+      title: { type: 'string', description: 'Short tooltip title (e.g. "✅ Site Title", "📝 Here it is!"). Keep it under 30 characters.' },
     },
     required: ['selector'],
   },
