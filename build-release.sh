@@ -68,7 +68,13 @@ cp -r "$SCRIPT_DIR/src"                   "$BUILD_DIR/"
 echo -e "       Copying assets/..."
 mkdir -p "$BUILD_DIR/assets"
 cp -r "$SCRIPT_DIR/assets/css"            "$BUILD_DIR/assets/"
+cp -r "$SCRIPT_DIR/assets/js"             "$BUILD_DIR/assets/"
 cp -r "$SCRIPT_DIR/assets/dist"           "$BUILD_DIR/assets/"
+
+# --- Frontend source (Vue/TypeScript) ---
+echo -e "       Copying frontend/ source..."
+cp -r "$SCRIPT_DIR/frontend"              "$BUILD_DIR/frontend"
+rm -rf "$BUILD_DIR/frontend/node_modules"
 
 echo -e "       ${GREEN}✓${NC} Files copied"
 
@@ -115,6 +121,8 @@ REQUIRED_FILES=(
     "$BUILD_DIR/assets/css/widget.css"
     "$BUILD_DIR/assets/dist/js/main.js"
     "$BUILD_DIR/assets/dist/css/main.css"
+    "$BUILD_DIR/frontend/src/main.ts"
+    "$BUILD_DIR/frontend/package.json"
 )
 
 ALL_OK=true
@@ -129,7 +137,7 @@ done
 
 # Warn if any unwanted files accidentally made it in
 UNWANTED_PATTERNS=(
-    "frontend/"
+    "frontend/node_modules/"
     "node_modules/"
     "plans/"
     ".git/"
