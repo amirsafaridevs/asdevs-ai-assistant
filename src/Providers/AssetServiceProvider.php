@@ -54,7 +54,7 @@ class AssetServiceProvider extends ServiceProvider
         /** @var SettingsService $settingsService */
         $settingsService = $this->container->make(SettingsService::class);
 
-        // Pass WordPress data to the frontend (API key stays on the server)
+        // Pass WordPress data + AI settings to the frontend agent.
         wp_localize_script('asdevs-ai-assistant', 'asdevsAiAssistant', [
             'apiUrl'       => rest_url('asdevs-ai-assistant/v1'),
             'nonce'        => wp_create_nonce('wp_rest'),
@@ -66,6 +66,8 @@ class AssetServiceProvider extends ServiceProvider
             'userId'       => get_current_user_id(),
             'aiProvider'   => $settingsService->getProvider(),
             'aiModel'      => $settingsService->getModel(),
+            'aiEndpoint'   => $settingsService->getEndpoint(),
+            'apiKey'       => $settingsService->getApiKey(),
             'isConfigured' => $settingsService->isConfigured(),
         ]);
     }

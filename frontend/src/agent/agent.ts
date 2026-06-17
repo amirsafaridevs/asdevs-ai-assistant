@@ -1,12 +1,13 @@
 /**
  * LangChain-inspired AI Agent.
  *
- * Architecture:
- * - Frontend sends chat requests to the WordPress REST API proxy
- * - Backend forwards requests to the configured AI provider (API key stays on server)
+ * Architecture (per spec):
+ * - Frontend calls AI API directly (using API key from WordPress settings)
  * - AI decides which tool to call
  * - Each tool calls a WordPress REST API endpoint
  * - AI NEVER accesses WordPress directly
+ *
+ * Direct frontend calls avoid PHP timeout limits and enable true streaming.
  *
  * This is a lightweight implementation of the LangChain tool-calling pattern
  * without the heavy LangChain.js dependency (keeps bundle under 150KB gzipped).
@@ -124,7 +125,7 @@ export class AIAgent {
     const contextStore = useContextStore();
     const navStore = useNavigationStore();
 
-    if (!window.asdevsAiAssistant?.isConfigured) {
+    if (!window.asdevsAiAssistant?.apiKey) {
       chatStore.addMessage('assistant',
         '⚠️ AI Assistant is not configured. Please set your API key in **AI Assistant → Settings**.');
       return;
@@ -161,7 +162,7 @@ export class AIAgent {
     const chatStore = useChatStore();
     const navStore = useNavigationStore();
 
-    if (!window.asdevsAiAssistant?.isConfigured) {
+    if (!window.asdevsAiAssistant?.apiKey) {
       chatStore.addMessage('assistant',
         '⚠️ AI Assistant is not configured. Please set your API key in **AI Assistant → Settings**.');
       return;
@@ -404,8 +405,11 @@ export class AIAgent {
   }
 
   /**
-   * Call the AI API through the WordPress backend proxy with SSE streaming.
+   * Call the AI API directly from the frontend with SSE streaming.
+   * Uses OpenAI-compatible chat completions format.
    * Streams tokens in real-time via the onToken callback for a responsive UI.
+   *
+   * This is the core LangChain pattern: frontend → AI → tools → WP REST API.
    *
    * @param messages The messages array to send
    * @param tools    Optional array of Tool objects to expose to the AI.
@@ -417,47 +421,34 @@ export class AIAgent {
     onToken?: (token: string) => void,
   ): Promise<AIResponse | null> {
     const config = window.asdevsAiAssistant;
-    if (!config?.isConfigured) throw new Error('AI Assistant is not configured');
+    const endpoint = config?.aiEndpoint || 'https://api.openai.com/v1/chat/completions';
+    const apiKey = config?.apiKey || '';
+    const model = config?.aiModel || 'gpt-4o-mini';
+
+    if (!apiKey) throw new Error('API key not configured');
+
+    const body: any = {
+      model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 1000,
+      stream: true,
+    };
 
     const toolsToUse = tools !== undefined ? tools : availableTools;
-    const toolDefs = toolsToUse.length > 0 ? toolsToUse.map((t) => t.toFunctionDefinition()) : [];
-    const requestBody = { messages, tools: toolDefs };
-
-    if (!onToken) {
-      const resp = await fetch(`${config.apiUrl}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-WP-Nonce': config.nonce,
-        },
-        body: JSON.stringify(requestBody),
-        signal: this.abortController?.signal,
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`AI API error (${resp.status}): ${errText}`);
-      }
-
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error);
-
-      const choice = data.choices?.[0];
-      if (!choice) return null;
-
-      return {
-        content: choice.message?.content || null,
-        tool_calls: choice.message?.tool_calls || undefined,
-      };
+    if (toolsToUse.length > 0) {
+      const toolDefs = toolsToUse.map((t) => t.toFunctionDefinition());
+      body.tools = toolDefs;
+      body.tool_choice = 'auto';
     }
 
-    const resp = await fetch(`${config.apiUrl}/chat/stream`, {
+    const resp = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-WP-Nonce': config.nonce,
+        'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(body),
       signal: this.abortController?.signal,
     });
 
@@ -466,80 +457,88 @@ export class AIAgent {
       throw new Error(`AI API error (${resp.status}): ${errText}`);
     }
 
+    if (!onToken) {
+      const data = await resp.json();
+      const choice = data.choices?.[0];
+      if (!choice) return null;
+      return {
+        content: choice.message?.content || null,
+        tool_calls: choice.message?.tool_calls || undefined,
+      };
+    }
+
     const reader = resp.body?.getReader();
     if (!reader) {
-      throw new Error('Streaming not supported');
+      const data = await resp.json();
+      const choice = data.choices?.[0];
+      if (!choice) return null;
+      const content = choice.message?.content || null;
+      if (content) onToken(content);
+      return {
+        content,
+        tool_calls: choice.message?.tool_calls || undefined,
+      };
     }
 
     const decoder = new TextDecoder();
-    let buffer = '';
     let fullContent = '';
-    const toolCallsAcc: Map<string, { id: string; name: string; arguments: string }> = new Map();
+    const toolCallsAcc: Map<number, { id: string; name: string; arguments: string }> = new Map();
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop() || '';
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-      for (const part of parts) {
-        if (!part.trim()) continue;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
-        let eventType = 'message';
-        const dataLines: string[] = [];
+        const jsonStr = trimmed.slice(6);
+        if (jsonStr === '[DONE]') continue;
 
-        for (const line of part.split('\n')) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            dataLines.push(line.slice(6));
-          }
+        let chunk: any;
+        try {
+          chunk = JSON.parse(jsonStr);
+        } catch {
+          continue;
         }
 
-        const data = dataLines.join('\n');
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
 
-        if (eventType === 'token') {
-          fullContent += data;
-          onToken(data);
-        } else if (eventType === 'tool_start') {
-          try {
-            const parsed = JSON.parse(data);
-            const key = parsed.id || parsed.name;
-            toolCallsAcc.set(key, {
-              id: parsed.id || '',
-              name: parsed.name || '',
-              arguments: '',
-            });
-          } catch {
-            // Ignore malformed tool_start payloads.
-          }
-        } else if (eventType === 'tool_args') {
-          try {
-            const parsed = JSON.parse(data);
-            const entry = toolCallsAcc.get(parsed.id);
-            if (entry) {
-              entry.arguments += parsed.args || '';
+        if (delta.content) {
+          fullContent += delta.content;
+          onToken(delta.content);
+        }
+
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            let entry = toolCallsAcc.get(idx);
+            if (!entry) {
+              entry = { id: '', name: '', arguments: '' };
+              toolCallsAcc.set(idx, entry);
             }
-          } catch {
-            // Ignore malformed tool_args payloads.
+
+            if (tc.id) entry.id = tc.id;
+            if (tc.function?.name) entry.name = tc.function.name;
+            if (tc.function?.arguments) entry.arguments += tc.function.arguments;
           }
-        } else if (eventType === 'error') {
-          throw new Error(data || 'AI API error');
         }
       }
     }
 
     const toolCalls: AIToolCall[] = [];
     for (const [, entry] of toolCallsAcc) {
-      if (entry.name) {
-        toolCalls.push({
-          id: entry.id,
-          type: 'function',
-          function: { name: entry.name, arguments: entry.arguments },
-        });
-      }
+      toolCalls.push({
+        id: entry.id,
+        type: 'function',
+        function: { name: entry.name, arguments: entry.arguments },
+      });
     }
 
     return {

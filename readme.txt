@@ -19,10 +19,9 @@ ASDevs AI Assistant is a smart, floating AI companion for your WordPress admin d
 * **Floating Chat Widget** — A sleek, always-accessible AI assistant button in the WordPress admin
 * **AI-Powered Navigation** — Ask the assistant where a setting is, and it will guide you there
 * **Context-Aware** — The assistant understands your current page, installed plugins, theme, and admin menus
-* **Secure by Design** — Your API key never leaves the server; all AI requests are proxied through the backend
+* **Secure by Design** — The assistant is available only to site administrators; WordPress context is fetched through authenticated REST endpoints
 * **Multiple AI Providers** — Supports OpenAI, Claude, DeepSeek, Gemini, and custom OpenAI-compatible endpoints
-* **Streaming Responses** — Real-time, token-by-token AI responses via Server-Sent Events (SSE)
-* **Zero Frontend Exposure** — No API keys or secrets are exposed to the browser
+* **Streaming Responses** — Real-time, token-by-token AI responses streamed directly from the browser to avoid PHP timeout limits
 
 **How It Works:**
 
@@ -47,7 +46,7 @@ OpenAI (GPT-4, GPT-4o, GPT-4o-mini, GPT-3.5 Turbo), Claude (Anthropic), DeepSeek
 
 = Is my API key secure? =
 
-Yes. Your API key is stored in the WordPress database and is never exposed to the frontend. All AI requests are proxied through the WordPress backend.
+The API key is stored in the WordPress database and is only loaded for logged-in site administrators inside wp-admin. Chat requests are sent directly from the administrator's browser to the selected AI provider so the plugin can stream responses reliably without PHP timeout limits. WordPress context and navigation tools still run through authenticated REST endpoints.
 
 = Does this plugin modify my site content? =
 
@@ -68,7 +67,7 @@ The full source repository is also available at https://github.com/amirsafaridev
 
 == External services ==
 
-This plugin connects to third-party AI providers to generate assistant responses. The site administrator chooses the provider and enters their own API key in **AI Assistant → Settings**. Requests are sent from your WordPress server only when an administrator uses the assistant chat.
+This plugin connects to third-party AI providers to generate assistant responses. The site administrator chooses the provider and enters their own API key in **AI Assistant → Settings**. Chat requests are sent directly from the administrator's browser to the selected AI provider when the assistant is used. This direct browser connection is required for reliable streaming and to avoid PHP timeout limits on long AI responses.
 
 **OpenAI**
 Used for chat completions when OpenAI is selected as the provider.

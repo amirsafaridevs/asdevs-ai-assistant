@@ -18,6 +18,8 @@ interface Window {
     userId: number;
     aiProvider: string;
     aiModel: string;
+    aiEndpoint: string;
+    apiKey: string;
     isConfigured: boolean;
   };
 }
