@@ -1,177 +1,113 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# ASDevs AI Assistant - WordPress.org Release Builder
-# Usage: bash build-release.sh
+# Build a release package for the WordPress plugin repository.
 #
-# This script:
-#   1. Builds the Vue frontend (npm run build)
-#   2. Copies only required files into "final/asdevs-ai-assistant"
-#   3. Installs production-only Composer deps inside the final folder
-#   4. Source code stays COMPLETELY untouched
+# This script never modifies the source directory: everything is assembled in
+# build/ and the finished plugin folder plus zip are written to final/.
+# Running it twice produces the same output.
 #
+set -euo pipefail
 
-set -e
+SLUG="asdevs-ai-assistant"
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${SOURCE_DIR}/build"
+FINAL_DIR="${SOURCE_DIR}/final"
+STAGE_DIR="${BUILD_DIR}/${SLUG}"
 
-# ── Colors ──────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+say() { printf '\033[0;36m==>\033[0m %s\n' "$1"; }
+fail() { printf '\033[0;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 
-# ── Paths ───────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_SLUG="asdevs-ai-assistant"
-FINAL_DIR="$SCRIPT_DIR/final"
-BUILD_DIR="$FINAL_DIR/$PLUGIN_SLUG"
+# --- One source of truth for the version ------------------------------------
 
-echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║   ASDevs AI Assistant - Release Builder     ║${NC}"
-echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "  ${YELLOW}⚠${NC}  Source directory is NEVER modified."
-echo -e "  ${YELLOW}⚠${NC}  Only the ${CYAN}final/${NC} output folder is touched."
-echo ""
+HEADER_VERSION="$(sed -n 's/^ \* Version:[[:space:]]*\(.*\)$/\1/p' "${SOURCE_DIR}/${SLUG}.php" | head -1 | tr -d '[:space:]')"
+CONST_VERSION="$(sed -n "s/^const VERSION = '\(.*\)';$/\1/p" "${SOURCE_DIR}/${SLUG}.php" | head -1)"
+README_VERSION="$(sed -n 's/^Stable tag:[[:space:]]*\(.*\)$/\1/p' "${SOURCE_DIR}/readme.txt" | head -1 | tr -d '[:space:]')"
 
-# ── Step 1: Clean ONLY the final output folder ──────────
-echo -e "${YELLOW}[1/5]${NC} Cleaning previous build (final/ only)..."
-rm -rf "$FINAL_DIR"
-echo -e "       ${GREEN}✓${NC} Cleaned final/"
+[ -n "${HEADER_VERSION}" ] || fail "No Version header found in ${SLUG}.php."
+[ "${HEADER_VERSION}" = "${CONST_VERSION}" ] || fail "Plugin header (${HEADER_VERSION}) and VERSION constant (${CONST_VERSION}) disagree."
+[ "${HEADER_VERSION}" = "${README_VERSION}" ] || fail "Plugin header (${HEADER_VERSION}) and readme.txt stable tag (${README_VERSION}) disagree."
 
-# ── Step 2: Build frontend → assets/dist/ ───────────────
-echo -e "${YELLOW}[2/5]${NC} Building Vue frontend..."
-cd "$SCRIPT_DIR/frontend"
+VERSION="${HEADER_VERSION}"
+say "Building ${SLUG} ${VERSION}"
 
-if [ ! -d "node_modules" ]; then
-    echo -e "       Installing npm dependencies (frontend only)..."
-    npm install --silent
-fi
+# --- Build the assets from source, in place, without polluting the package ---
 
-npm run build
-echo -e "       ${GREEN}✓${NC} Frontend built → assets/dist/"
+say "Building front-end assets"
+( cd "${SOURCE_DIR}/frontend" && npm ci --silent && npm run build --silent )
 
-# ── Step 3: Assemble release package ────────────────────
-echo -e "${YELLOW}[3/5]${NC} Copying files to final/$PLUGIN_SLUG/..."
+say "Installing production dependencies"
+( cd "${SOURCE_DIR}" && composer install --no-dev --optimize-autoloader --classmap-authoritative --quiet )
 
-mkdir -p "$BUILD_DIR"
+# --- Stage only what the plugin needs at runtime ----------------------------
 
-# --- Core plugin files ---
-echo -e "       Copying core files..."
-cp "$SCRIPT_DIR/asdevs-ai-assistant.php"  "$BUILD_DIR/"
-cp "$SCRIPT_DIR/readme.txt"               "$BUILD_DIR/"
+say "Staging package"
+rm -rf "${BUILD_DIR}"
+mkdir -p "${STAGE_DIR}"
 
-# --- PHP source ---
-echo -e "       Copying src/..."
-cp -r "$SCRIPT_DIR/src"                   "$BUILD_DIR/"
-
-# --- Assets (custom CSS + built dist) ---
-echo -e "       Copying assets/..."
-mkdir -p "$BUILD_DIR/assets"
-cp -r "$SCRIPT_DIR/assets/css"            "$BUILD_DIR/assets/"
-cp -r "$SCRIPT_DIR/assets/js"             "$BUILD_DIR/assets/"
-cp -r "$SCRIPT_DIR/assets/dist"           "$BUILD_DIR/assets/"
-
-# --- Frontend source (Vue/TypeScript) ---
-echo -e "       Copying frontend/ source..."
-cp -r "$SCRIPT_DIR/frontend"              "$BUILD_DIR/frontend"
-rm -rf "$BUILD_DIR/frontend/node_modules"
-
-echo -e "       ${GREEN}✓${NC} Files copied"
-
-# ── Step 4: Composer deps inside final folder ───────────
-echo -e "${YELLOW}[4/5]${NC} Installing production Composer deps inside final/..."
-cd "$BUILD_DIR"
-
-# Create composer.json inside build (production-only, no dev tools)
-cat > "$BUILD_DIR/composer.json" << 'COMPOSEREOF'
-{
-  "name": "asdevs/ai-assistant",
-  "description": "AI-powered WordPress admin assistant - read-only GPS for your site",
-  "type": "wordpress-plugin",
-  "license": "GPL-2.0-or-later",
-  "require": {
-    "php": ">=8.2"
-  },
-  "autoload": {
-    "psr-4": {
-      "ASDevs\\AIAssistant\\": "src/"
-    }
-  },
-  "config": {
-    "optimize-autoloader": true,
-    "sort-packages": true
-  }
+copy() {
+  [ -e "${SOURCE_DIR}/$1" ] || return 0
+  mkdir -p "${STAGE_DIR}/$(dirname "$1")"
+  cp -R "${SOURCE_DIR}/$1" "${STAGE_DIR}/$1"
 }
-COMPOSEREOF
 
-composer install --no-dev --optimize-autoloader --quiet
-# Remove composer.json & composer.lock from final package
-# (WordPress.org plugins don't distribute these)
-rm -f "$BUILD_DIR/composer.json" "$BUILD_DIR/composer.lock"
-echo -e "       ${GREEN}✓${NC} Composer deps installed (production only)"
+copy "${SLUG}.php"
+copy "uninstall.php"
+copy "readme.txt"
+copy "LICENSE"
+copy "src"
+copy "vendor"
+copy "assets/dist"
+copy "languages"
 
-# ── Step 5: Verify & Summary ────────────────────────────
-echo -e "${YELLOW}[5/5]${NC} Verifying package..."
+# Nothing that is only needed to develop or build the plugin ships.
+find "${STAGE_DIR}" \
+  \( -name 'node_modules' -o -name '.git*' -o -name 'tests' -o -name 'test' \
+     -o -name 'docs' -o -name 'examples' -o -name '.idea' -o -name '.vscode' \) \
+  -prune -exec rm -rf {} + 2>/dev/null || true
 
-REQUIRED_FILES=(
-    "$BUILD_DIR/asdevs-ai-assistant.php"
-    "$BUILD_DIR/readme.txt"
-    "$BUILD_DIR/src/App.php"
-    "$BUILD_DIR/vendor/autoload.php"
-    "$BUILD_DIR/assets/css/widget.css"
-    "$BUILD_DIR/assets/dist/js/main.js"
-    "$BUILD_DIR/assets/dist/css/main.css"
-    "$BUILD_DIR/frontend/src/main.ts"
-    "$BUILD_DIR/frontend/package.json"
-)
+find "${STAGE_DIR}" -type f \( \
+  -name '*.map' -o -name '*.ts' -o -name '*.vue' -o -name '*.scss' \
+  -o -name '*.dist' -o -name '*.lock' -o -name '*.log' -o -name '*.zip' \
+  -o -name '*.mp4' -o -name '*.MP4' -o -name '*.mov' \
+  -o -name '.DS_Store' -o -name 'Thumbs.db' -o -name '.env*' \
+  -o -name 'phpunit.xml*' -o -name 'phpcs.xml*' -o -name 'composer.json' \
+  -o -name 'composer.lock' -o -name 'package.json' -o -name 'package-lock.json' \
+  -o -name '*.yml' -o -name '*.yaml' -o -name 'Makefile' \) \
+  -delete
 
-ALL_OK=true
-for file in "${REQUIRED_FILES[@]}"; do
-    if [ -f "$file" ]; then
-        echo -e "       ${GREEN}✓${NC} ${file#$BUILD_DIR/}"
-    else
-        echo -e "       ${RED}✗ MISSING:${NC} ${file#$BUILD_DIR/}"
-        ALL_OK=false
-    fi
-done
-
-# Warn if any unwanted files accidentally made it in
-UNWANTED_PATTERNS=(
-    "frontend/node_modules/"
-    "node_modules/"
-    "plans/"
-    ".git/"
-    "README.md"
-    "build-release.sh"
-)
-for pattern in "${UNWANTED_PATTERNS[@]}"; do
-    if find "$BUILD_DIR" -path "*/$pattern*" -maxdepth 2 | grep -q .; then
-        echo -e "       ${YELLOW}⚠ UNEXPECTED:${NC} $pattern found in build"
-    fi
-done
-
-echo ""
-
-if [ "$ALL_OK" = true ]; then
-    FILE_COUNT=$(find "$BUILD_DIR" -type f | wc -l)
-    DIR_SIZE=$(du -sh "$BUILD_DIR" | cut -f1)
-
-    echo -e "${GREEN}╔══════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║          Build Complete! ✓                  ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  ${CYAN}Package:${NC}  $BUILD_DIR"
-    echo -e "  ${CYAN}Files:${NC}    $FILE_COUNT"
-    echo -e "  ${CYAN}Size:${NC}     $DIR_SIZE"
-    echo ""
-    echo -e "  ${YELLOW}Next step → create zip:${NC}"
-    echo -e "    ${CYAN}cd final && zip -r ../$PLUGIN_SLUG.zip $PLUGIN_SLUG${NC}"
-    echo ""
-    echo -e "  Then upload ${CYAN}$PLUGIN_SLUG.zip${NC} to WordPress.org"
-    echo ""
-    echo -e "  ${GREEN}✓ Source directory is untouched.${NC}"
-    echo ""
-else
-    echo -e "${RED}Build failed! Some required files are missing.${NC}"
-    exit 1
+# Translations: template, compiled catalogues, and the JSON the widget reads.
+say "Building translations"
+if command -v wp >/dev/null 2>&1; then
+  wp i18n make-pot "${SOURCE_DIR}" "${STAGE_DIR}/languages/${SLUG}.pot" \
+    --slug="${SLUG}" --domain="${SLUG}" --ignore-domain \
+    --exclude="frontend/node_modules,assets/dist,vendor,build,final,plans,tests" \
+    --quiet
 fi
+
+for po in "${SOURCE_DIR}"/languages/*.po; do
+  [ -e "${po}" ] || continue
+  name="$(basename "${po}" .po)"
+  if command -v msgfmt >/dev/null 2>&1; then
+    msgfmt -o "${STAGE_DIR}/languages/${name}.mo" "${po}"
+  elif command -v wp >/dev/null 2>&1; then
+    wp i18n make-mo "${po}" "${STAGE_DIR}/languages/${name}.mo" --quiet
+  fi
+done
+
+if command -v wp >/dev/null 2>&1 && [ -f "${SOURCE_DIR}/languages/i18n-map.json" ]; then
+  wp i18n make-json "${STAGE_DIR}/languages" \
+    --use-map="${SOURCE_DIR}/languages/i18n-map.json" --no-purge --quiet
+fi
+
+# --- Emit the finished package ----------------------------------------------
+
+say "Writing package"
+rm -rf "${FINAL_DIR}"
+mkdir -p "${FINAL_DIR}"
+cp -R "${STAGE_DIR}" "${FINAL_DIR}/${SLUG}"
+
+( cd "${FINAL_DIR}" && zip -q -r -X "${SLUG}-${VERSION}.zip" "${SLUG}" )
+
+rm -rf "${BUILD_DIR}"
+
+say "Done: final/${SLUG}-${VERSION}.zip ($(du -h "${FINAL_DIR}/${SLUG}-${VERSION}.zip" | cut -f1))"

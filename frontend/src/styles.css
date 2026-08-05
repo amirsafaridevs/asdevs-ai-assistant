@@ -1,0 +1,324 @@
+/*
+ * Calm, quiet, and part of WordPress rather than a guest in it.
+ * Everything is written with logical properties so right-to-left is a mirror,
+ * not an afterthought.
+ */
+
+.asdevs-ai {
+  --asdevs-ai-surface: #fff;
+  --asdevs-ai-ink: #1d2327;
+  --asdevs-ai-muted: #646970;
+  --asdevs-ai-line: #dcdcde;
+  --asdevs-ai-accent: #2271b1;
+  --asdevs-ai-soft: #f6f7f7;
+
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--asdevs-ai-ink);
+}
+
+.asdevs-ai-launcher {
+  position: fixed;
+  inset-block-end: 24px;
+  inset-inline-end: 24px;
+  z-index: 99998;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 1px solid var(--asdevs-ai-line);
+  border-radius: 50%;
+  background: var(--asdevs-ai-surface);
+  color: var(--asdevs-ai-accent);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+}
+
+.asdevs-ai-launcher:hover,
+.asdevs-ai-launcher:focus-visible {
+  border-color: var(--asdevs-ai-accent);
+}
+
+.asdevs-ai-panel {
+  position: fixed;
+  inset-block-end: 24px;
+  inset-inline-end: 24px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(400px, calc(100vw - 32px));
+  max-block-size: min(640px, calc(100vh - 64px));
+  border: 1px solid var(--asdevs-ai-line);
+  border-radius: 6px;
+  background: var(--asdevs-ai-surface);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 14%);
+  overflow: hidden;
+}
+
+.asdevs-ai-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--asdevs-ai-line);
+}
+
+.asdevs-ai-panel__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.asdevs-ai-panel__tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.asdevs-ai-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.asdevs-ai-start__question {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.asdevs-ai-start__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.asdevs-ai-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--asdevs-ai-line);
+  border-radius: 14px;
+  background: var(--asdevs-ai-soft);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
+.asdevs-ai-chip:hover,
+.asdevs-ai-chip:focus-visible {
+  border-color: var(--asdevs-ai-accent);
+}
+
+.asdevs-ai-msg__text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.asdevs-ai-msg--user {
+  align-self: flex-end;
+  max-inline-size: 85%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--asdevs-ai-soft);
+}
+
+.asdevs-ai-msg__note {
+  margin: 6px 0 0;
+  color: var(--asdevs-ai-muted);
+}
+
+.asdevs-ai-msg__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0 0;
+}
+
+.asdevs-ai-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--asdevs-ai-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.asdevs-ai-icon {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--asdevs-ai-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.asdevs-ai-table-wrap {
+  margin-block-start: 8px;
+  overflow-x: auto;
+}
+
+.asdevs-ai-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.asdevs-ai-table th,
+.asdevs-ai-table td {
+  padding: 5px 8px;
+  border-block-end: 1px solid var(--asdevs-ai-line);
+  text-align: start;
+  vertical-align: top;
+}
+
+.asdevs-ai-table th {
+  color: var(--asdevs-ai-muted);
+  font-weight: 500;
+}
+
+.asdevs-ai-error {
+  padding: 10px;
+  border: 1px solid #d63638;
+  border-radius: 4px;
+}
+
+.asdevs-ai-error p {
+  margin: 0;
+}
+
+.asdevs-ai-detail {
+  margin-block-start: 8px;
+  padding: 8px;
+  background: var(--asdevs-ai-soft);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.asdevs-ai-confirm {
+  padding: 10px 12px;
+  border: 1px solid var(--asdevs-ai-line);
+  border-radius: 4px;
+  background: var(--asdevs-ai-soft);
+}
+
+.asdevs-ai-confirm__summary {
+  margin: 0;
+  font-weight: 600;
+}
+
+.asdevs-ai-confirm__meta {
+  margin: 4px 0 0;
+  color: var(--asdevs-ai-muted);
+}
+
+.asdevs-ai-confirm__actions {
+  display: flex;
+  gap: 8px;
+  margin-block-start: 10px;
+}
+
+.asdevs-ai-activity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--asdevs-ai-muted);
+}
+
+.asdevs-ai-setup {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.asdevs-ai-history {
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.asdevs-ai-history__list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.asdevs-ai-history__list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 4px;
+}
+
+.asdevs-ai-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-block-start: 1px solid var(--asdevs-ai-line);
+}
+
+.asdevs-ai-composer__input {
+  flex: 1;
+  min-block-size: 34px;
+  max-block-size: 120px;
+  padding: 7px 9px;
+  border: 1px solid var(--asdevs-ai-line);
+  border-radius: 4px;
+  font: inherit;
+  resize: vertical;
+}
+
+.asdevs-ai-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--asdevs-ai-line);
+  border-radius: 3px;
+  background: var(--asdevs-ai-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.asdevs-ai-btn--primary {
+  border-color: var(--asdevs-ai-accent);
+  background: var(--asdevs-ai-accent);
+  color: #fff;
+}
+
+.asdevs-ai-btn[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.asdevs-ai :focus-visible {
+  outline: 2px solid var(--asdevs-ai-accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asdevs-ai * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 782px) {
+  .asdevs-ai-panel {
+    inset-inline: 8px;
+    inset-block-end: 8px;
+    inline-size: auto;
+    max-block-size: calc(100vh - 60px);
+  }
+}

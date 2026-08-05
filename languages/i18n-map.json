@@ -1,0 +1,10 @@
+{
+  "assets/dist/main.js": [
+    "frontend/src/main.ts",
+    "frontend/src/api.ts",
+    "frontend/src/assistant.ts",
+    "frontend/src/App.vue",
+    "frontend/src/components/MessageBubble.vue",
+    "frontend/src/components/ConfirmCard.vue"
+  ]
+}

@@ -1,0 +1,435 @@
+# Copyright (C) 2026 ASDevs
+# This file is distributed under the GPL-2.0-or-later license.
+msgid ""
+msgstr ""
+"Project-Id-Version: ASDevs AI Assistant 1.0.0\n"
+"Report-Msgid-Bugs-To: https://asdevs.ir/ai-assistant\n"
+"Last-Translator: ASDevs\n"
+"Language-Team: ASDevs\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-08-05T20:28:55+00:00\n"
+"X-Domain: asdevs-ai-assistant\n"
+
+#: src/Security/RiskPolicy.php:117
+msgid "%s items will be changed."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:187
+msgid "A key is saved. Leave blank to keep it."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:62
+#: src/Admin/SettingsPage.php:63
+#: src/Admin/SettingsPage.php:122
+msgid "AI Assistant"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:178
+msgid "API key"
+msgstr ""
+
+#: src/Security/RiskPolicy.php:167
+msgid "Activates a plugin, which starts running its code on the site."
+msgstr ""
+
+#: frontend/src/App.vue:141
+msgid "Ask an administrator of this site to set it up."
+msgstr ""
+
+#: frontend/src/App.vue:89
+#: frontend/src/App.vue:93
+msgid "Assistant"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:186
+msgid "Change a site setting"
+msgstr ""
+
+#: src/Security/RiskPolicy.php:153
+msgid "Changes a site-wide setting."
+msgstr ""
+
+#: src/Security/RiskPolicy.php:180
+msgid "Changes something that can be changed back."
+msgstr ""
+
+#: src/Security/RiskPolicy.php:160
+msgid "Changes what this person can do on the site."
+msgstr ""
+
+#: src/Security/NeverRules.php:143
+msgid "Changing the site address can cut off access to the whole site and cannot be undone from inside the admin. I will not change it; open Settings and change it yourself carefully."
+msgstr ""
+
+#: src/Context/StartSuggestions.php:145
+msgid "Check the %s inactive plugins"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:148
+msgid "Check the inactive plugins"
+msgstr ""
+
+#: frontend/src/assistant.ts:295
+msgid "Checking the details…"
+msgstr ""
+
+#: frontend/src/App.vue:104
+msgid "Close"
+msgstr ""
+
+#: frontend/src/components/ConfirmCard.vue:14
+msgid "Confirm this change"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:169
+msgid "Create a new post"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:60
+#: src/Context/StartSuggestions.php:61
+msgid "Create the first page of the site"
+msgstr ""
+
+#: frontend/src/App.vue:131
+msgid "Delete every conversation"
+msgstr ""
+
+#: frontend/src/App.vue:118
+msgid "Delete this conversation"
+msgstr ""
+
+#: src/Security/RiskPolicy.php:202
+msgid "Deletes the item permanently. This cannot be undone."
+msgstr ""
+
+#: src/Security/NeverRules.php:102
+msgid "Deleting your own account would sign you out with no way back. Do it from another administrator account if you really want to."
+msgstr ""
+
+#: src/Context/PageContext.php:118
+msgid "Editing the %1$s \"%2$s\""
+msgstr ""
+
+#: src/Context/PageContext.php:127
+msgid "Editing the account of %s"
+msgstr ""
+
+#: frontend/src/App.vue:102
+msgid "History"
+msgstr ""
+
+#: src/Rest/CapabilityController.php:100
+msgid "I could not find that capability on this site."
+msgstr ""
+
+#: src/Security/NeverRules.php:122
+msgid "I do not change your own access level. Ask another administrator to do it."
+msgstr ""
+
+#: src/Security/NeverRules.php:183
+msgid "I do not delete a whole collection in one go. Tell me which specific items to remove."
+msgstr ""
+
+#: src/Security/NeverRules.php:215
+msgid "I do not edit site files."
+msgstr ""
+
+#: src/Security/NeverRules.php:163
+msgid "I do not install code on the site. I can open the install page for you instead."
+msgstr ""
+
+#: src/Security/NeverRules.php:199
+msgid "I do not send messages to your site members. Use the plugin that owns that feature."
+msgstr ""
+
+#: frontend/src/components/ConfirmCard.vue:17
+msgid "Items affected:"
+msgstr ""
+
+#: src/Context/PageContext.php:138
+msgid "Looking at the list of %s"
+msgstr ""
+
+#: src/Context/PageContext.php:145
+msgid "Looking at the list of people with access"
+msgstr ""
+
+#: src/Context/PageContext.php:149
+msgid "Looking at the plugin list"
+msgstr ""
+
+#: frontend/src/assistant.ts:293
+msgid "Looking at what your site can do…"
+msgstr ""
+
+#: src/Security/RiskPolicy.php:174
+msgid "Makes content visible on the public site."
+msgstr ""
+
+#: frontend/src/assistant.ts:299
+msgid "Making the change…"
+msgstr ""
+
+#: frontend/src/App.vue:178
+msgid "Message the assistant"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:161
+msgid "Model"
+msgstr ""
+
+#: src/Security/RiskPolicy.php:195
+msgid "Moves the item to the trash, where it can be restored."
+msgstr ""
+
+#: frontend/src/App.vue:95
+msgid "New"
+msgstr ""
+
+#: frontend/src/components/ConfirmCard.vue:26
+msgid "No"
+msgstr ""
+
+#: frontend/src/App.vue:109
+msgid "No earlier conversations."
+msgstr ""
+
+#: src/Context/PageContext.php:153
+msgid "On the dashboard"
+msgstr ""
+
+#: src/Rest/SettingsController.php:109
+msgid "Only a site administrator can set up the AI service."
+msgstr ""
+
+#: frontend/src/assistant.ts:481
+msgid "Open in the editor"
+msgstr ""
+
+#: frontend/src/assistant.ts:322
+msgid "Open in the panel"
+msgstr ""
+
+#: frontend/src/App.vue:79
+msgid "Open the assistant"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:187
+msgid "Paste the key here"
+msgstr ""
+
+#: frontend/src/assistant.ts:483
+msgid "Preview"
+msgstr ""
+
+#: frontend/src/assistant.ts:297
+msgid "Reading from your site…"
+msgstr ""
+
+#: src/Security/RiskPolicy.php:71
+#: src/Security/RiskPolicy.php:134
+msgid "Reads information only."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:165
+msgid "Recommended default"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:196
+msgid "Remove the saved key for this service"
+msgstr ""
+
+#: frontend/src/assistant.ts:299
+msgid "Removing…"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:134
+msgid "Review the %s plugins with updates"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:204
+msgid "Save"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:130
+msgid "Saved, but the assistant still needs a key before it can work."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:129
+msgid "Saved. The assistant is ready — open it from any admin screen."
+msgstr ""
+
+#: frontend/src/App.vue:189
+msgid "Send"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:147
+msgid "Service"
+msgstr ""
+
+#: frontend/src/App.vue:139
+msgid "Set up the AI service"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:94
+msgid "Show the %1$s waiting in %2$s"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:177
+msgid "Show the %s people with access"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:100
+msgid "Show the drafts waiting in %s"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:180
+msgid "Show the site users"
+msgstr ""
+
+#: frontend/src/components/MessageBubble.vue:31
+msgid "Showing %1$s of %2$s."
+msgstr ""
+
+#: frontend/src/api.ts:46
+#: frontend/src/assistant.ts:223
+msgid "Something went wrong."
+msgstr ""
+
+#: frontend/src/App.vue:173
+msgid "Stop"
+msgstr ""
+
+#: frontend/src/components/MessageBubble.vue:52
+msgid "Technical details"
+msgstr ""
+
+#: frontend/src/App.vue:185
+msgid "Tell me what you need"
+msgstr ""
+
+#: src/Execution/ActionExecutor.php:97
+msgid "That is not something on your site I can work with."
+msgstr ""
+
+#: src/Ai/Providers/StreamingHttpProvider.php:176
+msgid "The AI service is busy. Try again in a moment."
+msgstr ""
+
+#: src/Ai/Providers/StreamingHttpProvider.php:108
+#: src/Ai/Providers/StreamingHttpProvider.php:140
+#: src/Ai/Providers/StreamingHttpProvider.php:182
+msgid "The AI service is not responding right now. Try again in a moment."
+msgstr ""
+
+#: src/Ai/Providers/StreamingHttpProvider.php:168
+msgid "The AI service refused the connection. Check the service settings once and I will carry on."
+msgstr ""
+
+#: frontend/src/api.ts:101
+msgid "The assistant could not be reached."
+msgstr ""
+
+#: src/Rest/ChatController.php:95
+msgid "The assistant needs an AI service before it can work."
+msgstr ""
+
+#: frontend/src/App.vue:137
+msgid "The assistant needs an AI service to work. Set it up once and you will not need to come back."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:137
+msgid "The assistant needs an AI service to work. Set it up once; you will not need to come back to this page."
+msgstr ""
+
+#: frontend/src/assistant.ts:276
+msgid "The assistant stopped unexpectedly."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:190
+msgid "The key is stored on this site and is never sent to the browser or to us."
+msgstr ""
+
+#: src/Rest/ChatController.php:105
+msgid "There is nothing to answer yet."
+msgstr ""
+
+#: frontend/src/components/ConfirmCard.vue:20
+msgid "This can be undone."
+msgstr ""
+
+#: frontend/src/components/ConfirmCard.vue:20
+msgid "This cannot be undone."
+msgstr ""
+
+#: src/Security/RiskPolicy.php:79
+msgid "This is part of a bulk change across several items."
+msgstr ""
+
+#: src/Rest/Controller.php:54
+msgid "This page has been open for a while. Reload it and try again."
+msgstr ""
+
+#: frontend/src/components/MessageBubble.vue:43
+msgid "Try again"
+msgstr ""
+
+#: frontend/src/App.vue:113
+msgid "Untitled"
+msgstr ""
+
+#: frontend/src/assistant.ts:482
+msgid "View on the site"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:207
+msgid "What leaves your site"
+msgstr ""
+
+#: frontend/src/App.vue:147
+msgid "What would you like to do on your site today?"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:209
+msgid "When you write to the assistant, your message, the recent conversation, and the site information needed to answer it are sent to the AI service you selected above. Nothing is sent to us. Conversations are stored on this site, for your account only, and you can delete them at any time from the assistant."
+msgstr ""
+
+#: src/Context/StartSuggestions.php:137
+msgid "Which plugins have updates?"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:187
+msgid "Which site settings can you change?"
+msgstr ""
+
+#: frontend/src/assistant.ts:205
+#: frontend/src/assistant.ts:301
+msgid "Working on it…"
+msgstr ""
+
+#: src/Context/StartSuggestions.php:168
+msgid "Write a new post"
+msgstr ""
+
+#: frontend/src/components/ConfirmCard.vue:24
+msgid "Yes, do it"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:75
+msgid "You are not allowed to change these settings."
+msgstr ""
+
+#: src/Execution/ActionExecutor.php:93
+msgid "You are signed out. Sign in again and I will continue."
+msgstr ""
+
+#: src/Rest/Controller.php:46
+msgid "You need to be signed in to use the assistant."
+msgstr ""
+
+#: src/Context/PageContext.php:114
+msgid "item"
+msgstr ""
+

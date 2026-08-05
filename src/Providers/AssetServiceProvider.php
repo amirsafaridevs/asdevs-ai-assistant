@@ -1,74 +1,137 @@
 <?php
+/**
+ * Front-end assets.
+ *
+ * @package ASDevs\AIAssistant
+ */
 
-declare(strict_types=1);
+declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Contracts\ServiceProvider;
-use ASDevs\AIAssistant\Services\SettingsService;
+use ASDevs\AIAssistant\Context\PageContext;
+use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Rest\Controller;
 
-class AssetServiceProvider extends ServiceProvider
-{
-    public function register(): void
-    {
-        add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
-    }
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-    /**
-     * Enqueue plugin assets in the admin area.
-     */
-    public function enqueueAssets(string $hookSuffix): void
-    {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
+/**
+ * Puts the assistant on every admin screen, and nowhere else.
+ *
+ * The widget is the only visible change activation makes: no welcome page, no
+ * notice, no redirect (section 7.1).
+ */
+final class AssetServiceProvider extends ServiceProvider {
 
-        $distUrl = ASDEVS_AI_ASSISTANT_DIST_URL;
+	/**
+	 * Script and style handle.
+	 */
+	private const HANDLE = 'asdevs-ai-assistant';
 
-        // Enqueue Vue app JS
-        wp_enqueue_script(
-            'asdevs-ai-assistant',
-            $distUrl . 'js/main.js',
-            [],
-            ASDEVS_AI_ASSISTANT_VERSION,
-            true
-        );
+	/**
+	 * Wire to WordPress.
+	 */
+	public function boot(): void {
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_action( 'admin_footer', array( $this, 'render_root' ) );
+		add_action( 'init', array( $this, 'load_translations' ) );
+	}
 
-        // Enqueue Vue app CSS
-        wp_enqueue_style(
-            'asdevs-ai-assistant',
-            $distUrl . 'css/main.css',
-            [],
-            ASDEVS_AI_ASSISTANT_VERSION
-        );
+	/**
+	 * Load the plugin's translations.
+	 */
+	public function load_translations(): void {
+		load_plugin_textdomain(
+			'asdevs-ai-assistant',
+			false,
+			dirname( plugin_basename( ASDEVS_AI_ASSISTANT_FILE ) ) . '/languages'
+		);
+	}
 
-        // Enqueue the plugin stylesheet that styles the floating widget
-        wp_enqueue_style(
-            'asdevs-ai-assistant-widget',
-            ASDEVS_AI_ASSISTANT_ASSETS_URL . 'css/widget.css',
-            [],
-            ASDEVS_AI_ASSISTANT_VERSION
-        );
+	/**
+	 * Enqueue the widget.
+	 */
+	public function enqueue(): void {
+		if ( ! $this->should_load() ) {
+			return;
+		}
 
-        // Get settings service
-        /** @var SettingsService $settingsService */
-        $settingsService = $this->container->make(SettingsService::class);
+		$script = ASDEVS_AI_ASSISTANT_DIR . 'assets/dist/main.js';
+		$style  = ASDEVS_AI_ASSISTANT_DIR . 'assets/dist/main.css';
 
-        // Pass WordPress data + AI settings to the frontend agent.
-        wp_localize_script('asdevs-ai-assistant', 'asdevsAiAssistant', [
-            'apiUrl'       => rest_url('asdevs-ai-assistant/v1'),
-            'nonce'        => wp_create_nonce('wp_rest'),
-            'adminUrl'     => admin_url(),
-            'siteName'     => get_bloginfo('name'),
-            'siteUrl'      => site_url(),
-            'currentPage'  => self_admin_url(),
-            'isAdmin'      => is_admin(),
-            'userId'       => get_current_user_id(),
-            'aiProvider'   => $settingsService->getProvider(),
-            'aiModel'      => $settingsService->getModel(),
-            'aiEndpoint'   => $settingsService->getEndpoint(),
-            'apiKey'       => $settingsService->getApiKey(),
-            'isConfigured' => $settingsService->isConfigured(),
-        ]);
-    }
+		if ( ! is_readable( $script ) ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			self::HANDLE,
+			ASDEVS_AI_ASSISTANT_URL . 'assets/dist/main.js',
+			array( 'wp-i18n' ),
+			ASDEVS_AI_ASSISTANT_VERSION,
+			true
+		);
+
+		if ( is_readable( $style ) ) {
+			wp_enqueue_style(
+				self::HANDLE,
+				ASDEVS_AI_ASSISTANT_URL . 'assets/dist/main.css',
+				array(),
+				ASDEVS_AI_ASSISTANT_VERSION
+			);
+		}
+
+		wp_set_script_translations( self::HANDLE, 'asdevs-ai-assistant', ASDEVS_AI_ASSISTANT_DIR . 'languages' );
+
+		wp_add_inline_script(
+			self::HANDLE,
+			'window.asdevsAiAssistant = ' . wp_json_encode( $this->boot_data() ) . ';',
+			'before'
+		);
+	}
+
+	/**
+	 * The root element the widget mounts into.
+	 */
+	public function render_root(): void {
+		if ( ! $this->should_load() ) {
+			return;
+		}
+
+		echo '<div id="asdevs-ai-assistant-root"></div>';
+	}
+
+	/**
+	 * Data the widget needs before its first request.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function boot_data(): array {
+		return array(
+			'restUrl'  => esc_url_raw( rest_url( Controller::NAMESPACE ) ),
+			'siteRest' => esc_url_raw( rest_url() ),
+			'nonce'    => wp_create_nonce( 'wp_rest' ),
+			'adminUrl' => esc_url_raw( admin_url() ),
+			'locale'   => get_user_locale(),
+			'isRtl'    => is_rtl(),
+			'page'     => $this->container->get( PageContext::class )->current(),
+		);
+	}
+
+	/**
+	 * Whether the widget belongs on this screen.
+	 */
+	private function should_load(): bool {
+		if ( ! is_admin() || ! is_user_logged_in() || ! current_user_can( 'read' ) ) {
+			return false;
+		}
+
+		/**
+		 * Filter whether the assistant appears on the current screen.
+		 *
+		 * @param bool $should_load Whether to load the widget.
+		 */
+		return (bool) apply_filters( 'asdevs_ai_assistant_should_load', true );
+	}
 }

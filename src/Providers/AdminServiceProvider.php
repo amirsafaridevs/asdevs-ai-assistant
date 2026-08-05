@@ -1,36 +1,53 @@
 <?php
+/**
+ * Admin screens.
+ *
+ * @package ASDevs\AIAssistant
+ */
 
-declare(strict_types=1);
+declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Contracts\ServiceProvider;
+use ASDevs\AIAssistant\Admin\SettingsPage;
+use ASDevs\AIAssistant\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Core\Container;
+use ASDevs\AIAssistant\Core\ServiceProvider;
 
-class AdminServiceProvider extends ServiceProvider
-{
-    public function register(): void
-    {
-        add_action('admin_footer', [$this, 'renderWidgetContainer']);
-        add_action('admin_head', [$this, 'addMetaViewport']);
-    }
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-    /**
-     * Render the Vue app mount point in admin footer.
-     */
-    public function renderWidgetContainer(): void
-    {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
+/**
+ * Registers the single setup screen.
+ */
+final class AdminServiceProvider extends ServiceProvider {
 
-        echo '<div id="asdevs-ai-assistant-app"></div>';
-    }
+	/**
+	 * Bind services.
+	 */
+	public function register(): void {
+		$this->container->singleton(
+			SettingsPage::class,
+			static fn( Container $container ) => new SettingsPage(
+				$container->get( Settings::class ),
+				$container->get( ProviderRegistry::class )
+			)
+		);
+	}
 
-    /**
-     * Add meta viewport for proper scaling.
-     */
-    public function addMetaViewport(): void
-    {
-        echo '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
-    }
+	/**
+	 * Wire to WordPress.
+	 */
+	public function boot(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		$page = $this->container->get( SettingsPage::class );
+
+		add_action( 'admin_menu', array( $page, 'register_menu' ) );
+		add_action( 'admin_post_asdevs_ai_assistant_save_settings', array( $page, 'handle_save' ) );
+	}
 }
