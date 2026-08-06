@@ -37,6 +37,14 @@ final class AnthropicProvider extends StreamingHttpProvider {
 	private const DEFAULT_MODEL = 'claude-opus-5';
 
 	/**
+	 * Models that can reason before they answer.
+	 *
+	 * Adaptive thinking is the only supported form on these; older models take
+	 * a fixed token budget instead, which this plugin does not use.
+	 */
+	private const REASONING_MODELS = array( 'claude-opus-5', 'claude-sonnet-5' );
+
+	/**
 	 * Settings.
 	 *
 	 * @var Settings
@@ -80,6 +88,22 @@ final class AnthropicProvider extends StreamingHttpProvider {
 	}
 
 	/**
+	 * The model used when the site has not chosen one.
+	 */
+	public function default_model(): string {
+		return self::DEFAULT_MODEL;
+	}
+
+	/**
+	 * Models that can show their reasoning.
+	 *
+	 * @return string[]
+	 */
+	public function reasoning_models(): array {
+		return self::REASONING_MODELS;
+	}
+
+	/**
 	 * Whether a key is stored.
 	 */
 	public function is_configured(): bool {
@@ -98,11 +122,23 @@ final class AnthropicProvider extends StreamingHttpProvider {
 
 		$body = array(
 			'model'      => $model,
-			'max_tokens' => 8192,
+			'max_tokens' => 16000,
 			'stream'     => true,
 			'system'     => $request->system(),
 			'messages'   => $request->messages(),
 		);
+
+		// On these models reasoning is on unless it is turned off, so the choice
+		// is always stated rather than left to the default. A summary is asked
+		// for because the raw reasoning is never returned.
+		if ( in_array( $model, self::REASONING_MODELS, true ) ) {
+			$body['thinking'] = $this->settings->thinking()
+				? array(
+					'type'    => 'adaptive',
+					'display' => 'summarized',
+				)
+				: array( 'type' => 'disabled' );
+		}
 
 		if ( array() !== $request->tools() ) {
 			$body['tools'] = $request->tools();
@@ -138,10 +174,13 @@ final class AnthropicProvider extends StreamingHttpProvider {
 			$block = isset( $event['content_block'] ) && is_array( $event['content_block'] ) ? $event['content_block'] : array();
 
 			$blocks[ $index ] = array(
-				'type' => isset( $block['type'] ) ? (string) $block['type'] : 'text',
-				'id'   => isset( $block['id'] ) ? (string) $block['id'] : '',
-				'name' => isset( $block['name'] ) ? (string) $block['name'] : '',
-				'json' => '',
+				'type'      => isset( $block['type'] ) ? (string) $block['type'] : 'text',
+				'id'        => isset( $block['id'] ) ? (string) $block['id'] : '',
+				'name'      => isset( $block['name'] ) ? (string) $block['name'] : '',
+				'json'      => '',
+				'thinking'  => isset( $block['thinking'] ) ? (string) $block['thinking'] : '',
+				'signature' => isset( $block['signature'] ) ? (string) $block['signature'] : '',
+				'data'      => isset( $block['data'] ) ? (string) $block['data'] : '',
 			);
 
 			return;
@@ -164,6 +203,29 @@ final class AnthropicProvider extends StreamingHttpProvider {
 
 			if ( 'input_json_delta' === $kind && isset( $blocks[ $index ] ) ) {
 				$blocks[ $index ]['json'] .= (string) ( $delta['partial_json'] ?? '' );
+
+				return;
+			}
+
+			if ( 'thinking_delta' === $kind && isset( $blocks[ $index ] ) ) {
+				$text = (string) ( $delta['thinking'] ?? '' );
+
+				$blocks[ $index ]['thinking'] .= $text;
+
+				$emit(
+					array(
+						'type' => 'thinking',
+						'text' => $text,
+					)
+				);
+
+				return;
+			}
+
+			// The signature is what makes a reasoning block replayable on the
+			// next turn; it is carried, never shown.
+			if ( 'signature_delta' === $kind && isset( $blocks[ $index ] ) ) {
+				$blocks[ $index ]['signature'] .= (string) ( $delta['signature'] ?? '' );
 			}
 
 			return;
@@ -171,6 +233,18 @@ final class AnthropicProvider extends StreamingHttpProvider {
 
 		if ( 'content_block_stop' === $type && isset( $blocks[ $index ] ) ) {
 			$block = $blocks[ $index ];
+
+			if ( 'thinking' === $block['type'] || 'redacted_thinking' === $block['type'] ) {
+				$emit(
+					array(
+						'type'      => 'thinking_end',
+						'kind'      => (string) $block['type'],
+						'thinking'  => (string) $block['thinking'],
+						'signature' => (string) $block['signature'],
+						'data'      => (string) $block['data'],
+					)
+				);
+			}
 
 			if ( 'tool_use' === $block['type'] ) {
 				$arguments = json_decode( '' === $block['json'] ? '{}' : $block['json'], true );

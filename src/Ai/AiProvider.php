@@ -40,6 +40,18 @@ interface AiProvider {
 	public function models(): array;
 
 	/**
+	 * The model used when the site has not chosen one.
+	 */
+	public function default_model(): string;
+
+	/**
+	 * Model identifiers that can show their reasoning as they work.
+	 *
+	 * @return string[]
+	 */
+	public function reasoning_models(): array;
+
+	/**
 	 * Whether the provider is configured well enough to answer.
 	 */
 	public function is_configured(): bool;
@@ -49,6 +61,8 @@ interface AiProvider {
 	 *
 	 * The callback receives normalized events:
 	 * - array{type:'text', text:string}
+	 * - array{type:'thinking', text:string}
+	 * - array{type:'thinking_end', thinking:string, signature:string, data:string}
 	 * - array{type:'tool_call', id:string, name:string, arguments:array}
 	 * - array{type:'done', reason:string}
 	 *

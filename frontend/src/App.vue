@@ -13,22 +13,25 @@ import {
   removeConversation,
   retry,
   send,
+  show,
   startNew,
   state,
 } from './assistant';
 import ConfirmCard from './components/ConfirmCard.vue';
 import MessageBubble from './components/MessageBubble.vue';
+import SettingsPanel from './components/SettingsPanel.vue';
 
 const draft = ref('');
 const log = ref<HTMLElement | null>(null);
 const input = ref<HTMLTextAreaElement | null>(null);
 
 const empty = computed(() => state.bubbles.length === 0);
+const lastSteps = computed(() => state.bubbles[state.bubbles.length - 1]?.steps?.length ?? 0);
 
 void load();
 
 watch(
-  () => [state.bubbles.length, state.activity, state.bubbles[state.bubbles.length - 1]?.text],
+  () => [state.bubbles.length, lastSteps.value, state.bubbles[state.bubbles.length - 1]?.text],
   async () => {
     await nextTick();
     log.value?.scrollTo({ top: log.value.scrollHeight, behavior: 'smooth' });
@@ -36,9 +39,9 @@ watch(
 );
 
 watch(
-  () => state.open,
-  async (isOpen) => {
-    if (isOpen) {
+  () => [state.open, state.view],
+  async () => {
+    if (state.open && state.view === 'chat') {
       await nextTick();
       input.value?.focus();
     }
@@ -65,6 +68,12 @@ function onEscape(): void {
     return;
   }
 
+  if (state.view !== 'chat') {
+    show('chat');
+
+    return;
+  }
+
   close();
 }
 </script>
@@ -79,7 +88,17 @@ function onEscape(): void {
       :aria-label="__('Open the assistant')"
       @click="open()"
     >
-      <span aria-hidden="true">◍</span>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <path
+          d="M12 3.5c1 2.7 1.8 3.5 4.5 4.5-2.7 1-3.5 1.8-4.5 4.5-1-2.7-1.8-3.5-4.5-4.5 2.7-1 3.5-1.8 4.5-4.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M17.5 13.5c.55 1.5 1 1.95 2.5 2.5-1.5.55-1.95 1-2.5 2.5-.55-1.5-1-1.95-2.5-2.5 1.5-.55 1.95-1 2.5-2.5Z"
+          fill="currentColor"
+          opacity=".55"
+        />
+      </svg>
     </button>
 
     <section
@@ -89,56 +108,97 @@ function onEscape(): void {
       :aria-label="__('Assistant')"
       @keydown.esc="onEscape"
     >
-      <header class="asdevs-ai-panel__head">
-        <h2 class="asdevs-ai-panel__title">{{ __('Assistant') }}</h2>
-        <div class="asdevs-ai-panel__tools">
-          <button type="button" class="asdevs-ai-link" @click="startNew()">{{ __('New') }}</button>
-          <button
-            type="button"
-            class="asdevs-ai-link"
-            :aria-expanded="state.showHistory"
-            @click="state.showHistory = !state.showHistory"
-          >
-            {{ __('History') }}
-          </button>
-          <button type="button" class="asdevs-ai-icon" :aria-label="__('Close')" @click="close()">×</button>
-        </div>
-      </header>
+      <header class="asdevs-ai-head">
+        <h2 class="asdevs-ai-head__title">
+          <span class="asdevs-ai-head__dot" aria-hidden="true"></span>
+          {{ state.view === 'settings' ? __('Settings') : state.view === 'history' ? __('History') : __('Assistant') }}
+        </h2>
 
-      <div v-if="state.showHistory" class="asdevs-ai-history">
-        <p v-if="!state.conversations.length" class="asdevs-ai-msg__note">{{ __('No earlier conversations.') }}</p>
-        <ul v-else class="asdevs-ai-history__list">
-          <li v-for="conversation in state.conversations" :key="conversation.id">
-            <button type="button" class="asdevs-ai-link" @click="openConversation(conversation.id)">
-              {{ conversation.title || __('Untitled') }}
+        <nav class="asdevs-ai-head__tools">
+          <button
+            v-if="state.view !== 'chat'"
+            type="button"
+            class="asdevs-ai-icon"
+            :aria-label="__('Back to the conversation')"
+            :title="__('Back to the conversation')"
+            @click="show('chat')"
+          >
+            ←
+          </button>
+          <template v-else>
+            <button
+              type="button"
+              class="asdevs-ai-icon"
+              :aria-label="__('New conversation')"
+              :title="__('New conversation')"
+              @click="startNew()"
+            >
+              +
             </button>
             <button
               type="button"
               class="asdevs-ai-icon"
-              :aria-label="__('Delete this conversation')"
-              @click="removeConversation(conversation.id)"
+              :aria-label="__('History')"
+              :title="__('History')"
+              @click="show('history')"
             >
-              ×
+              ⟲
             </button>
-          </li>
-        </ul>
-        <button
-          v-if="state.conversations.length"
-          type="button"
-          class="asdevs-ai-link"
-          @click="removeAllConversations()"
-        >
-          {{ __('Delete every conversation') }}
-        </button>
+            <button
+              v-if="state.canConfigure"
+              type="button"
+              class="asdevs-ai-icon"
+              :aria-label="__('Settings')"
+              :title="__('Settings')"
+              @click="show('settings')"
+            >
+              ⚙
+            </button>
+          </template>
+          <button type="button" class="asdevs-ai-icon" :aria-label="__('Close')" :title="__('Close')" @click="close()">
+            ×
+          </button>
+        </nav>
+      </header>
+
+      <SettingsPanel v-if="state.view === 'settings'" />
+
+      <div v-else-if="state.view === 'history'" class="asdevs-ai-history">
+        <p v-if="!state.conversations.length" class="asdevs-ai-note">{{ __('No earlier conversations.') }}</p>
+        <template v-else>
+          <ul class="asdevs-ai-history__list">
+            <li v-for="conversation in state.conversations" :key="conversation.id">
+              <button type="button" class="asdevs-ai-history__open" @click="openConversation(conversation.id)">
+                {{ conversation.title || __('Untitled') }}
+              </button>
+              <button
+                type="button"
+                class="asdevs-ai-icon"
+                :aria-label="__('Delete this conversation')"
+                @click="removeConversation(conversation.id)"
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+          <button type="button" class="asdevs-ai-link" @click="removeAllConversations()">
+            {{ __('Delete every conversation') }}
+          </button>
+        </template>
       </div>
 
-      <!-- The one case where setup is asked for, and only inside the window. -->
+      <!-- Setup is asked for once, and only inside the window. -->
       <div v-else-if="!state.loading && !state.ready" class="asdevs-ai-setup">
         <p>{{ __('The assistant needs an AI service to work. Set it up once and you will not need to come back.') }}</p>
-        <a v-if="state.canConfigure" class="asdevs-ai-btn asdevs-ai-btn--primary" :href="state.settingsUrl">
+        <button
+          v-if="state.canConfigure"
+          type="button"
+          class="asdevs-ai-btn asdevs-ai-btn--primary"
+          @click="show('settings')"
+        >
           {{ __('Set up the AI service') }}
-        </a>
-        <p v-else class="asdevs-ai-msg__note">{{ __('Ask an administrator of this site to set it up.') }}</p>
+        </button>
+        <p v-else class="asdevs-ai-note">{{ __('Ask an administrator of this site to set it up.') }}</p>
       </div>
 
       <template v-else>
@@ -154,12 +214,7 @@ function onEscape(): void {
             </ul>
           </div>
 
-          <MessageBubble
-            v-for="item in state.bubbles"
-            :key="item.id"
-            :bubble="item"
-            @retry="retry()"
-          />
+          <MessageBubble v-for="item in state.bubbles" :key="item.id" :bubble="item" @retry="retry()" />
 
           <ConfirmCard
             v-if="state.pending"
@@ -167,11 +222,6 @@ function onEscape(): void {
             @confirm="confirmPending()"
             @decline="declinePending()"
           />
-
-          <p v-if="state.busy && state.activity" class="asdevs-ai-activity">
-            <span>{{ state.activity }}</span>
-            <button type="button" class="asdevs-ai-link" @click="cancel()">{{ __('Stop') }}</button>
-          </p>
         </div>
 
         <form class="asdevs-ai-composer" @submit.prevent="submit()">
@@ -185,8 +235,28 @@ function onEscape(): void {
             :placeholder="__('Tell me what you need')"
             @keydown="onKeydown"
           ></textarea>
-          <button type="submit" class="asdevs-ai-btn asdevs-ai-btn--primary" :disabled="state.busy || !draft.trim()">
-            {{ __('Send') }}
+
+          <button
+            v-if="state.busy"
+            type="button"
+            class="asdevs-ai-send asdevs-ai-send--stop"
+            :aria-label="__('Stop')"
+            :title="__('Stop')"
+            @click="cancel()"
+          >
+            <span aria-hidden="true"></span>
+          </button>
+          <button
+            v-else
+            type="submit"
+            class="asdevs-ai-send"
+            :disabled="!draft.trim()"
+            :aria-label="__('Send')"
+            :title="__('Send')"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+              <path d="M4 12h13M11 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </button>
         </form>
       </template>

@@ -51,6 +51,7 @@ final class Settings {
 				'provider' => 'anthropic',
 				'model'    => '',
 				'keys'     => array(),
+				'thinking' => true,
 			)
 		);
 
@@ -72,6 +73,16 @@ final class Settings {
 	}
 
 	/**
+	 * Whether the assistant may show what it is reasoning about.
+	 *
+	 * Reasoning costs tokens, so the site decides. Off means the request asks
+	 * the service not to reason at all, not merely to hide it.
+	 */
+	public function thinking(): bool {
+		return (bool) $this->all()['thinking'];
+	}
+
+	/**
 	 * The stored key for a provider.
 	 *
 	 * @param string $provider Provider id.
@@ -85,15 +96,20 @@ final class Settings {
 	/**
 	 * Save settings.
 	 *
-	 * @param string $provider Provider id.
-	 * @param string $model    Model id, may be empty.
-	 * @param string $key      API key; an empty string keeps the stored one.
+	 * @param string    $provider Provider id.
+	 * @param string    $model    Model id, may be empty.
+	 * @param string    $key      API key; an empty string keeps the stored one.
+	 * @param bool|null $thinking Reasoning preference; null keeps the stored one.
 	 */
-	public function save( string $provider, string $model, string $key ): void {
+	public function save( string $provider, string $model, string $key, ?bool $thinking = null ): void {
 		$settings = $this->all();
 
 		$settings['provider'] = sanitize_key( $provider );
 		$settings['model']    = sanitize_text_field( $model );
+
+		if ( null !== $thinking ) {
+			$settings['thinking'] = $thinking;
+		}
 
 		if ( '' !== $key ) {
 			$keys = is_array( $settings['keys'] ) ? $settings['keys'] : array();

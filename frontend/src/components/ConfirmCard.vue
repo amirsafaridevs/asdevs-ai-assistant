@@ -13,11 +13,9 @@ defineEmits<{ (event: 'confirm'): void; (event: 'decline'): void }>();
   -->
   <div class="asdevs-ai-confirm" role="group" :aria-label="__('Confirm this change')">
     <p class="asdevs-ai-confirm__summary">{{ pending.summary }}</p>
-    <p v-if="pending.affected" class="asdevs-ai-confirm__meta">
-      {{ __('Items affected:') }} {{ pending.affected }}
-    </p>
     <p class="asdevs-ai-confirm__meta">
-      {{ pending.reversible ? __('This can be undone.') : __('This cannot be undone.') }}
+      <span v-if="pending.affected">{{ __('Items affected:') }} {{ pending.affected }}</span>
+      <span>{{ pending.reversible ? __('This can be undone.') : __('This cannot be undone.') }}</span>
     </p>
     <div class="asdevs-ai-confirm__actions">
       <button type="button" class="asdevs-ai-btn asdevs-ai-btn--primary" @click="$emit('confirm')">

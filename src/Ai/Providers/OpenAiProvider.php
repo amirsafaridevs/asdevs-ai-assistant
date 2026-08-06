@@ -79,6 +79,22 @@ final class OpenAiProvider extends StreamingHttpProvider {
 	}
 
 	/**
+	 * The model used when the site has not chosen one.
+	 */
+	public function default_model(): string {
+		return self::DEFAULT_MODEL;
+	}
+
+	/**
+	 * No model here reports its reasoning as it works.
+	 *
+	 * @return string[]
+	 */
+	public function reasoning_models(): array {
+		return array();
+	}
+
+	/**
 	 * Whether a key is stored.
 	 */
 	public function is_configured(): bool {

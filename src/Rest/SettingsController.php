@@ -85,6 +85,10 @@ final class SettingsController extends Controller {
 							'default'           => '',
 							'sanitize_callback' => static fn( $value ) => trim( sanitize_text_field( (string) $value ) ),
 						),
+						'thinking' => array(
+							'type'    => 'boolean',
+							'default' => null,
+						),
 					),
 				),
 			)
@@ -122,10 +126,12 @@ final class SettingsController extends Controller {
 
 		foreach ( $this->providers->all() as $provider ) {
 			$providers[] = array(
-				'id'         => $provider->id(),
-				'label'      => $provider->label(),
-				'models'     => $provider->models(),
-				'configured' => $provider->is_configured(),
+				'id'               => $provider->id(),
+				'label'            => $provider->label(),
+				'models'           => $provider->models(),
+				'default_model'    => $provider->default_model(),
+				'reasoning_models' => $provider->reasoning_models(),
+				'configured'       => $provider->is_configured(),
 			);
 		}
 
@@ -133,6 +139,7 @@ final class SettingsController extends Controller {
 			array(
 				'provider'  => $this->settings->provider(),
 				'model'     => $this->settings->model(),
+				'thinking'  => $this->settings->thinking(),
 				'has_key'   => '' !== $this->settings->key_for( $this->settings->provider() ),
 				'ready'     => $this->providers->is_ready(),
 				'providers' => $providers,
@@ -146,10 +153,13 @@ final class SettingsController extends Controller {
 	 * @param WP_REST_Request $request The request.
 	 */
 	public function save( WP_REST_Request $request ): WP_REST_Response {
+		$thinking = $request->get_param( 'thinking' );
+
 		$this->settings->save(
 			(string) $request->get_param( 'provider' ),
 			(string) $request->get_param( 'model' ),
-			(string) $request->get_param( 'key' )
+			(string) $request->get_param( 'key' ),
+			null === $thinking ? null : (bool) $thinking
 		);
 
 		return $this->show();

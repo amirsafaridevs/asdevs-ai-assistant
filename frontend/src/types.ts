@@ -48,6 +48,8 @@ export interface ConversationSummary {
 
 export type Block =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string; signature: string }
+  | { type: 'redacted_thinking'; data: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean };
 
@@ -56,16 +58,48 @@ export interface Message {
   content: Block[];
 }
 
+/** One thing the assistant did, in the order it happened. */
+export interface Step {
+  id: string;
+  kind: 'thinking' | 'tool' | 'note';
+  label: string;
+  /** The reasoning itself, or what a tool was asked to do. */
+  detail: string;
+  status: 'running' | 'done' | 'failed' | 'skipped';
+  startedAt: number;
+  endedAt: number | null;
+}
+
 /** What the person actually sees in the window. */
 export interface Bubble {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  /** Everything that happened before the answer, in order. */
+  steps?: Step[];
   /** Rows to show as a table rather than prose. */
   rows?: Array<Record<string, string>>;
   total?: number | null;
   links?: Array<{ label: string; href: string }>;
   error?: { message: string; detail: string; retryable: boolean } | null;
+}
+
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  models: Record<string, string>;
+  default_model: string;
+  reasoning_models: string[];
+  configured: boolean;
+}
+
+export interface ServiceSettings {
+  provider: string;
+  model: string;
+  thinking: boolean;
+  has_key: boolean;
+  ready: boolean;
+  providers: ProviderInfo[];
 }
 
 export interface Assessment {
@@ -106,7 +140,7 @@ export interface PendingConfirmation {
 }
 
 export interface StreamEvent {
-  type: 'text' | 'tool_call' | 'done' | 'error' | 'end';
+  type: 'text' | 'thinking' | 'thinking_end' | 'tool_call' | 'done' | 'error' | 'end';
   text?: string;
   id?: string;
   name?: string;
@@ -115,4 +149,9 @@ export interface StreamEvent {
   message?: string;
   detail?: string;
   retryable?: boolean;
+  /** Reasoning blocks, which go back to the service untouched on the next turn. */
+  kind?: 'thinking' | 'redacted_thinking';
+  thinking?: string;
+  signature?: string;
+  data?: string;
 }

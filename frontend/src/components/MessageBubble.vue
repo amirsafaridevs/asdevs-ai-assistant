@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { __, sprintf } from '../api';
 import type { Bubble } from '../types';
+import Timeline from './Timeline.vue';
 
 defineProps<{ bubble: Bubble }>();
 defineEmits<{ (event: 'retry'): void }>();
@@ -11,6 +12,8 @@ const showDetail = ref(false);
 
 <template>
   <div class="asdevs-ai-msg" :class="`asdevs-ai-msg--${bubble.role}`">
+    <Timeline v-if="bubble.steps && bubble.steps.length" :steps="bubble.steps" />
+
     <p v-if="bubble.text" class="asdevs-ai-msg__text">{{ bubble.text }}</p>
 
     <div v-if="bubble.rows && bubble.rows.length" class="asdevs-ai-table-wrap">
@@ -26,7 +29,7 @@ const showDetail = ref(false);
           </tr>
         </tbody>
       </table>
-      <p v-if="bubble.total && bubble.total > bubble.rows.length" class="asdevs-ai-msg__note">
+      <p v-if="bubble.total && bubble.total > bubble.rows.length" class="asdevs-ai-note">
         <!-- translators: 1: number of rows shown, 2: total number of items. -->
         {{ sprintf(__('Showing %1$s of %2$s.'), bubble.rows.length, bubble.total) }}
       </p>
@@ -37,7 +40,7 @@ const showDetail = ref(false);
     </p>
 
     <div v-if="bubble.error" class="asdevs-ai-error">
-      <p>{{ bubble.error.message }}</p>
+      <p class="asdevs-ai-error__message">{{ bubble.error.message }}</p>
       <p class="asdevs-ai-msg__links">
         <button v-if="bubble.error.retryable" type="button" class="asdevs-ai-link" @click="$emit('retry')">
           {{ __('Try again') }}

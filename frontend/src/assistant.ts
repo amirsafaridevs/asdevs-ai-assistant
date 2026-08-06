@@ -8,6 +8,8 @@ import type {
   Message,
   Outcome,
   PendingConfirmation,
+  ServiceSettings,
+  Step,
   Suggestion,
 } from './types';
 
@@ -17,12 +19,14 @@ const MAX_STEPS = 12;
 /** How much of a tool result the model is given back. */
 const MAX_RESULT_CHARS = 6000;
 
+type View = 'chat' | 'history' | 'settings';
+
 interface State {
   open: boolean;
   ready: boolean;
   loading: boolean;
   busy: boolean;
-  activity: string;
+  view: View;
   bubbles: Bubble[];
   messages: Message[];
   suggestions: Suggestion[];
@@ -32,8 +36,13 @@ interface State {
   canConfigure: boolean;
   conversationId: string;
   title: string;
-  showHistory: boolean;
   lastPrompt: string;
+  /** The service settings, edited in place inside the window. */
+  settings: ServiceSettings | null;
+  settingsKey: string;
+  settingsBusy: boolean;
+  settingsSaved: boolean;
+  settingsError: string;
 }
 
 export const state = reactive<State>({
@@ -41,7 +50,7 @@ export const state = reactive<State>({
   ready: false,
   loading: true,
   busy: false,
-  activity: '',
+  view: 'chat',
   bubbles: [],
   messages: [],
   suggestions: [],
@@ -51,8 +60,12 @@ export const state = reactive<State>({
   canConfigure: false,
   conversationId: newId(),
   title: '',
-  showHistory: false,
   lastPrompt: '',
+  settings: null,
+  settingsKey: '',
+  settingsBusy: false,
+  settingsSaved: false,
+  settingsError: '',
 });
 
 let controller: AbortController | null = null;
@@ -61,11 +74,53 @@ function newId(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Add a bubble and hand back the tracked copy.
+ *
+ * The object that comes back must be the one the view is watching, or writing
+ * to it as the answer streams in changes nothing on screen.
+ */
 function bubble(role: 'user' | 'assistant', text = ''): Bubble {
-  const entry: Bubble = { id: newId(), role, text, error: null };
-  state.bubbles.push(entry);
+  state.bubbles.push({ id: newId(), role, text, steps: [], error: null });
 
-  return entry;
+  return state.bubbles[state.bubbles.length - 1];
+}
+
+function lastAssistant(): Bubble {
+  const last = state.bubbles[state.bubbles.length - 1];
+
+  return last && last.role === 'assistant' ? last : bubble('assistant');
+}
+
+/** Open a line on the timeline and hand back the tracked copy. */
+function beginStep(answer: Bubble, kind: Step['kind'], label: string, detail = ''): Step {
+  if (!answer.steps) {
+    answer.steps = [];
+  }
+
+  // Read the list back off the bubble: the tracked copy is the one the view
+  // is watching, and the only one worth writing to.
+  const steps = answer.steps;
+
+  steps.push({ id: newId(), kind, label, detail, status: 'running', startedAt: Date.now(), endedAt: null });
+
+  return steps[steps.length - 1];
+}
+
+function endStep(step: Step, status: Step['status']): Step {
+  step.status = status;
+  step.endedAt = Date.now();
+
+  return step;
+}
+
+/** Nothing should keep spinning once the turn has moved on. */
+function closeOpenSteps(answer: Bubble, status: Step['status'] = 'done'): void {
+  for (const step of answer.steps ?? []) {
+    if (step.status === 'running') {
+      endStep(step, status);
+    }
+  }
 }
 
 export async function load(): Promise<void> {
@@ -102,7 +157,18 @@ export function cancel(): void {
   controller?.abort();
   controller = null;
   state.busy = false;
-  state.activity = '';
+
+  for (const item of state.bubbles) {
+    closeOpenSteps(item, 'skipped');
+  }
+}
+
+export function show(view: View): void {
+  state.view = state.view === view && view !== 'chat' ? 'chat' : view;
+
+  if (state.view === 'settings') {
+    void loadSettings();
+  }
 }
 
 export function startNew(): void {
@@ -112,7 +178,7 @@ export function startNew(): void {
   state.pending = null;
   state.conversationId = newId();
   state.title = '';
-  state.showHistory = false;
+  state.view = 'chat';
   void load();
 }
 
@@ -125,7 +191,7 @@ export async function openConversation(id: string): Promise<void> {
   state.title = stored.title;
   state.messages = stored.messages ?? [];
   state.bubbles = rebuild(state.messages);
-  state.showHistory = false;
+  state.view = 'chat';
   state.pending = null;
 }
 
@@ -146,6 +212,69 @@ export async function removeAllConversations(): Promise<void> {
   startNew();
 }
 
+/* -------------------------------------------------------------------------
+ * The service settings, edited where they are used.
+ * ---------------------------------------------------------------------- */
+
+export async function loadSettings(): Promise<void> {
+  if (!state.canConfigure || state.settingsBusy) {
+    return;
+  }
+
+  state.settingsBusy = true;
+  state.settingsError = '';
+
+  try {
+    state.settings = await api.settings();
+  } catch (error) {
+    state.settingsError = (error as Error).message;
+  } finally {
+    state.settingsBusy = false;
+  }
+}
+
+/** A different service means a different model list, so the choice resets. */
+export function chooseProvider(id: string): void {
+  if (!state.settings) {
+    return;
+  }
+
+  state.settings.provider = id;
+  state.settings.model = '';
+  state.settings.has_key = state.settings.providers.find((item) => item.id === id)?.configured ?? false;
+  state.settingsKey = '';
+  state.settingsSaved = false;
+}
+
+export async function saveSettings(): Promise<void> {
+  if (!state.settings || state.settingsBusy) {
+    return;
+  }
+
+  state.settingsBusy = true;
+  state.settingsError = '';
+  state.settingsSaved = false;
+
+  try {
+    state.settings = await api.saveSettings({
+      provider: state.settings.provider,
+      model: state.settings.model,
+      key: state.settingsKey,
+      thinking: state.settings.thinking,
+    });
+
+    state.settingsKey = '';
+    state.settingsSaved = true;
+    state.ready = state.settings.ready;
+
+    void load();
+  } catch (error) {
+    state.settingsError = (error as Error).message;
+  } finally {
+    state.settingsBusy = false;
+  }
+}
+
 /** Rebuild the visible conversation from what was stored. */
 function rebuild(messages: Message[]): Bubble[] {
   const bubbles: Bubble[] = [];
@@ -157,7 +286,7 @@ function rebuild(messages: Message[]): Bubble[] {
       .join('');
 
     if (text.trim() !== '') {
-      bubbles.push({ id: newId(), role: message.role, text, error: null });
+      bubbles.push({ id: newId(), role: message.role, text, steps: [], error: null });
     }
   }
 
@@ -171,6 +300,7 @@ export async function send(text: string): Promise<void> {
     return;
   }
 
+  state.view = 'chat';
   state.lastPrompt = trimmed;
   state.pending = null;
   bubble('user', trimmed);
@@ -196,25 +326,52 @@ async function run(): Promise<void> {
   state.busy = true;
   controller = new AbortController();
 
+  // One answer per turn, however many rounds of tool use it takes to get there.
+  const answer = bubble('assistant');
+
   try {
     for (let step = 0; step < MAX_STEPS; step += 1) {
-      const answer = bubble('assistant');
       const calls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+      const thoughts: Block[] = [];
+      // Held on an object because the stream writes to it from a callback.
+      const open: { thinking: Step | null } = { thinking: null };
+      let said = '';
       let failed = false;
-
-      state.activity = __('Working on it…');
 
       await streamChat(
         state.messages,
         (event) => {
+          if (event.type === 'thinking' && event.text) {
+            open.thinking = open.thinking ?? beginStep(answer, 'thinking', __('Thinking it through'));
+            open.thinking.detail += event.text;
+          }
+
+          if (event.type === 'thinking_end') {
+            if (open.thinking) {
+              endStep(open.thinking, 'done');
+              open.thinking = null;
+            }
+
+            // Reasoning goes back to the service exactly as it arrived; the
+            // signature is what makes the next turn accept it.
+            thoughts.push(
+              event.kind === 'redacted_thinking'
+                ? { type: 'redacted_thinking', data: event.data ?? '' }
+                : { type: 'thinking', thinking: event.thinking ?? '', signature: event.signature ?? '' }
+            );
+          }
+
           if (event.type === 'text' && event.text) {
-            state.activity = '';
+            if (said === '' && answer.text !== '') {
+              answer.text += '\n\n';
+            }
+
+            said += event.text;
             answer.text += event.text;
           }
 
           if (event.type === 'tool_call' && event.id && event.name) {
             calls.push({ id: event.id, name: event.name, input: event.arguments ?? {} });
-            state.activity = activityFor(event.name, event.arguments ?? {});
           }
 
           if (event.type === 'error') {
@@ -229,18 +386,18 @@ async function run(): Promise<void> {
         controller.signal
       );
 
-      if (answer.text.trim() === '' && !answer.error && calls.length === 0) {
-        state.bubbles = state.bubbles.filter((entry) => entry.id !== answer.id);
+      if (open.thinking) {
+        endStep(open.thinking, 'done');
       }
 
       if (failed || calls.length === 0) {
         break;
       }
 
-      const assistantBlocks: Block[] = [];
+      const assistantBlocks: Block[] = [...thoughts];
 
-      if (answer.text.trim() !== '') {
-        assistantBlocks.push({ type: 'text', text: answer.text });
+      if (said.trim() !== '') {
+        assistantBlocks.push({ type: 'text', text: said });
       }
 
       for (const call of calls) {
@@ -253,18 +410,24 @@ async function run(): Promise<void> {
       let paused = false;
 
       for (let index = 0; index < calls.length; index += 1) {
-        const outcome = await runTool(calls[index], answer);
+        const call = calls[index];
+        const line = beginStep(answer, 'tool', labelFor(call.name, call.input), detailFor(call.name, call.input));
+        const outcome = await runTool(call, answer);
 
         if (outcome === 'paused' && state.pending) {
+          // The step stays open: the work is not finished, it is waiting.
+          line.label = __('Waiting for you to decide');
+
           // Every call this turn still owes an answer, even the ones we never
           // reached — they are handed back once the person decides.
           state.pending.collected = results;
-          state.pending.skipped = calls.slice(index + 1).map((call) => call.id);
+          state.pending.skipped = calls.slice(index + 1).map((skipped) => skipped.id);
           paused = true;
           break;
         }
 
         if (outcome !== 'paused') {
+          endStep(line, outcome.type === 'tool_result' && outcome.is_error ? 'failed' : 'done');
           results.push(outcome);
         }
       }
@@ -277,7 +440,6 @@ async function run(): Promise<void> {
     }
   } catch (error) {
     if ((error as Error).name !== 'AbortError') {
-      const answer = bubble('assistant');
       answer.error = {
         message: __('The assistant stopped unexpectedly.'),
         detail: (error as Error).message,
@@ -286,26 +448,57 @@ async function run(): Promise<void> {
     }
   } finally {
     state.busy = false;
-    state.activity = '';
     controller = null;
+
+    // A step left open would spin forever — unless the turn is genuinely
+    // waiting on a decision.
+    if (!state.pending) {
+      closeOpenSteps(answer, answer.error ? 'failed' : 'done');
+    }
+
+    if (answer.text.trim() === '' && !answer.error && (answer.steps ?? []).length === 0) {
+      state.bubbles = state.bubbles.filter((entry) => entry.id !== answer.id);
+    }
+
     await persist();
   }
 }
 
-/** Say what is happening in the user's terms, never in the site's. */
-function activityFor(name: string, input: Record<string, unknown>): string {
+/** Name the work in the person's terms, never in the site's. */
+function labelFor(name: string, input: Record<string, unknown>): string {
   switch (name) {
     case 'list_capabilities':
-      return __('Looking at what your site can do…');
+      return __('Looking at what your site can do');
     case 'describe_capability':
-      return __('Checking the details…');
+      return __('Checking the details');
     case 'read_site':
-      return __('Reading from your site…');
+      return __('Reading from your site');
     case 'change_site':
-      return input.method === 'DELETE' ? __('Removing…') : __('Making the change…');
+      return input.method === 'DELETE' ? __('Removing') : __('Making the change');
+    case 'open_admin_page':
+      return __('Finding the right screen');
     default:
-      return __('Working on it…');
+      return __('Working on it');
   }
+}
+
+/** The one line of substance behind a step, for anyone who wants to look. */
+function detailFor(name: string, input: Record<string, unknown>): string {
+  const route = typeof input.route === 'string' ? input.route : '';
+
+  if (name === 'read_site' && route !== '') {
+    return `GET ${route}`;
+  }
+
+  if (name === 'change_site' && route !== '') {
+    return `${String(input.method ?? 'POST')} ${route}`;
+  }
+
+  if (name === 'open_admin_page' && typeof input.path === 'string') {
+    return input.path;
+  }
+
+  return route;
 }
 
 type ToolOutcome = Block | 'paused';
@@ -391,7 +584,16 @@ export async function confirmPending(): Promise<void> {
   state.pending = null;
   state.busy = true;
 
-  const answer = state.bubbles[state.bubbles.length - 1] ?? bubble('assistant');
+  const answer = lastAssistant();
+
+  closeOpenSteps(answer);
+
+  const line = beginStep(
+    answer,
+    'tool',
+    labelFor('change_site', { method: pending.method }),
+    `${pending.method} ${pending.route}`
+  );
 
   try {
     const outcome = await api.execute({
@@ -402,10 +604,18 @@ export async function confirmPending(): Promise<void> {
     });
 
     applyOutcome(outcome, answer);
+    endStep(line, outcome.status === 'ok' ? 'done' : 'failed');
 
     state.messages.push({
       role: 'user',
       content: settle(pending, result(pending.toolUseId, compact(outcome), outcome.status !== 'ok')),
+    });
+  } catch (error) {
+    endStep(line, 'failed');
+
+    state.messages.push({
+      role: 'user',
+      content: settle(pending, result(pending.toolUseId, { error: (error as Error).message }, true)),
     });
   } finally {
     state.busy = false;
@@ -423,6 +633,11 @@ export async function declinePending(): Promise<void> {
   }
 
   state.pending = null;
+
+  const answer = lastAssistant();
+
+  closeOpenSteps(answer, 'skipped');
+  endStep(beginStep(answer, 'note', __('You declined that change')), 'skipped');
 
   state.messages.push({
     role: 'user',

@@ -1,4 +1,12 @@
-import type { BootData, Bootstrap, ConversationSummary, Message, Outcome, StreamEvent } from './types';
+import type {
+  BootData,
+  Bootstrap,
+  ConversationSummary,
+  Message,
+  Outcome,
+  ServiceSettings,
+  StreamEvent,
+} from './types';
 
 declare global {
   interface Window {
@@ -58,6 +66,11 @@ export const api = {
 
   execute: (payload: { method: string; route: string; params?: Record<string, unknown>; confirmation?: string }) =>
     request<Outcome>('/execute', { method: 'POST', body: JSON.stringify(payload) }),
+
+  settings: () => request<ServiceSettings>('/settings'),
+
+  saveSettings: (payload: { provider: string; model: string; key: string; thinking: boolean }) =>
+    request<ServiceSettings>('/settings', { method: 'POST', body: JSON.stringify(payload) }),
 
   conversations: () => request<ConversationSummary[]>('/conversations'),
 
