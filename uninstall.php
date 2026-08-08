@@ -21,12 +21,14 @@ function asdevs_ai_assistant_uninstall_site(): void {
 	global $wpdb;
 
 	delete_option( 'asdevs_ai_assistant_service' );
+	delete_option( 'asdevs_ai_assistant_memory' );
 
-	// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- One-off cleanup at uninstall; there is no core API for prefixed meta or transient deletion.
-	$wpdb->delete( $wpdb->usermeta, array( 'meta_key' => 'asdevs_ai_assistant_conversations' ) ); // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+	// Core API deletes the key for every user (object_id is ignored when delete_all is true).
+	delete_metadata( 'user', 0, 'asdevs_ai_assistant_conversations', '', true );
 
+	// Prefixed options (transients + timeouts) have no bulk-delete API in core.
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	foreach ( array( '_transient_asdevs_ai_', '_transient_timeout_asdevs_ai_' ) as $prefix ) {
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- See above.
 		$names = $wpdb->get_col(
 			$wpdb->prepare(
 				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
@@ -38,6 +40,7 @@ function asdevs_ai_assistant_uninstall_site(): void {
 			delete_option( (string) $name );
 		}
 	}
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 }
 
 if ( is_multisite() ) {

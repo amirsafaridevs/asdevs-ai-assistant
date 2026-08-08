@@ -1,6 +1,6 @@
 <?php
 /**
- * AI service settings.
+ * AI connector preference.
  *
  * @package ASDevs\AIAssistant
  */
@@ -14,10 +14,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Stores which AI service to use and its credentials.
+ * Stores which WordPress AI connector the assistant should use.
  *
- * The key is written but never read back out to the browser: settings
- * responses report only whether a key is present (section 23.2).
+ * API keys live in Settings → Connectors (WordPress core). This option only
+ * records the site's preferred connector id.
  */
 final class Settings {
 
@@ -48,95 +48,38 @@ final class Settings {
 		$this->memo = wp_parse_args(
 			is_array( $stored ) ? $stored : array(),
 			array(
-				'provider' => 'anthropic',
-				'model'    => '',
-				'keys'     => array(),
-				'thinking' => true,
+				'provider' => '',
 			)
+		);
+
+		// Drop legacy fields (keys, model, thinking) from the in-memory view.
+		$this->memo = array(
+			'provider' => sanitize_key( (string) $this->memo['provider'] ),
 		);
 
 		return $this->memo;
 	}
 
 	/**
-	 * The selected provider id.
+	 * The selected WordPress connector id.
 	 */
 	public function provider(): string {
 		return (string) $this->all()['provider'];
 	}
 
 	/**
-	 * The selected model, or an empty string for the provider default.
-	 */
-	public function model(): string {
-		return (string) $this->all()['model'];
-	}
-
-	/**
-	 * Whether the assistant may show what it is reasoning about.
+	 * Save the preferred connector.
 	 *
-	 * Reasoning costs tokens, so the site decides. Off means the request asks
-	 * the service not to reason at all, not merely to hide it.
+	 * @param string $provider Connector / provider id from the WordPress AI Client registry.
 	 */
-	public function thinking(): bool {
-		return (bool) $this->all()['thinking'];
-	}
-
-	/**
-	 * The stored key for a provider.
-	 *
-	 * @param string $provider Provider id.
-	 */
-	public function key_for( string $provider ): string {
-		$keys = $this->all()['keys'];
-
-		return is_array( $keys ) && isset( $keys[ $provider ] ) ? (string) $keys[ $provider ] : '';
-	}
-
-	/**
-	 * Save settings.
-	 *
-	 * @param string    $provider Provider id.
-	 * @param string    $model    Model id, may be empty.
-	 * @param string    $key      API key; an empty string keeps the stored one.
-	 * @param bool|null $thinking Reasoning preference; null keeps the stored one.
-	 */
-	public function save( string $provider, string $model, string $key, ?bool $thinking = null ): void {
-		$settings = $this->all();
-
-		$settings['provider'] = sanitize_key( $provider );
-		$settings['model']    = sanitize_text_field( $model );
-
-		if ( null !== $thinking ) {
-			$settings['thinking'] = $thinking;
-		}
-
-		if ( '' !== $key ) {
-			$keys = is_array( $settings['keys'] ) ? $settings['keys'] : array();
-
-			$keys[ $settings['provider'] ] = $key;
-			$settings['keys']              = $keys;
-		}
-
-		update_option( self::OPTION, $settings, false );
-
-		$this->memo = null;
-	}
-
-	/**
-	 * Remove the stored key for a provider.
-	 *
-	 * @param string $provider Provider id.
-	 */
-	public function forget_key( string $provider ): void {
-		$settings = $this->all();
-		$keys     = is_array( $settings['keys'] ) ? $settings['keys'] : array();
-
-		unset( $keys[ sanitize_key( $provider ) ] );
-
-		$settings['keys'] = $keys;
-
-		update_option( self::OPTION, $settings, false );
+	public function save( string $provider ): void {
+		update_option(
+			self::OPTION,
+			array(
+				'provider' => sanitize_key( $provider ),
+			),
+			false
+		);
 
 		$this->memo = null;
 	}

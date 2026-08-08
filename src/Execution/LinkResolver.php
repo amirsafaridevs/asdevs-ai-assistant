@@ -56,6 +56,21 @@ final class LinkResolver {
 		$id    = (int) $data['id'];
 		$links = array();
 
+		// Media: edit in library + direct file URL. Attachment "preview" pages are useless here.
+		if ( $this->routes->is_media_route( $action ) ) {
+			$edit = get_edit_post_link( $id, 'raw' );
+
+			if ( $edit ) {
+				$links['edit'] = $edit;
+			}
+
+			if ( isset( $data['source_url'] ) && is_string( $data['source_url'] ) && '' !== $data['source_url'] ) {
+				$links['file'] = $data['source_url'];
+			}
+
+			return $links;
+		}
+
 		$post_type = $this->routes->post_type_for( $action );
 
 		if ( null !== $post_type ) {

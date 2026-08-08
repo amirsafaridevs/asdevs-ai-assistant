@@ -1,13 +1,12 @@
 <?php
 /**
  * Plugin Name:       ASDevs AI Assistant
- * Plugin URI:        https://asdevs.ir/ai-assistant
  * Description:       A colleague inside your WordPress admin. It discovers what your site can actually do and does it for you.
  * Version:           1.0.0
- * Requires at least: 6.4
+ * Requires at least: 7.0
  * Requires PHP:      8.1
- * Author:            ASDevs
- * Author URI:        https://asdevs.ir
+ * Author:            amirsafaridevs
+ * Author URI:        https://profiles.wordpress.org/amirsafaridevs/
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       asdevs-ai-assistant
@@ -53,6 +52,25 @@ require_once $asdevs_ai_assistant_autoloader;
 add_action(
 	'plugins_loaded',
 	static function (): void {
+		global $wp_version;
+
+		if ( version_compare( (string) $wp_version, '7.0', '<' ) ) {
+			add_action(
+				'admin_notices',
+				static function (): void {
+					if ( ! current_user_can( 'activate_plugins' ) ) {
+						return;
+					}
+
+					echo '<div class="notice notice-error"><p>';
+					echo esc_html__( 'ASDevs AI Assistant requires WordPress 7.0 or later so it can use core AI connectors.', 'asdevs-ai-assistant' );
+					echo '</p></div>';
+				}
+			);
+
+			return;
+		}
+
 		Core\Plugin::instance()->boot();
 	},
 	5

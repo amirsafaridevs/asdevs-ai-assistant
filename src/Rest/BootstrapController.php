@@ -93,11 +93,14 @@ final class BootstrapController extends Controller {
 	public function handle(): WP_REST_Response {
 		$snapshot = $this->snapshot->get();
 
+		$ready = $this->providers->is_ready();
+
 		return new WP_REST_Response(
 			array(
-				'ready'         => $this->providers->is_ready(),
+				'ready'         => $ready,
+				'ready_detail'  => $ready ? '' : $this->providers->not_ready_detail(),
 				'can_configure' => current_user_can( 'manage_options' ),
-				'settings_url'  => admin_url( 'options-general.php?page=' . ASDEVS_AI_ASSISTANT_SLUG ),
+				'settings_url'  => admin_url( 'admin.php?page=' . ASDEVS_AI_ASSISTANT_SLUG ),
 				'site'          => $snapshot['site'],
 				'user'          => $snapshot['user'],
 				'suggestions'   => $this->suggestions->get(),

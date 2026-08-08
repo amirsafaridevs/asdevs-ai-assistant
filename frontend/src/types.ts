@@ -13,6 +13,8 @@ export interface PageContext {
   base?: string;
   post_type?: string;
   taxonomy?: string;
+  title?: string;
+  document_title?: string;
   description?: string;
   focus?: {
     type: string;
@@ -31,6 +33,8 @@ export interface Suggestion {
 
 export interface Bootstrap {
   ready: boolean;
+  /** Present when ready is false — why the server thinks no connector is usable. */
+  ready_detail?: string;
   can_configure: boolean;
   settings_url: string;
   site: Record<string, unknown>;
@@ -48,6 +52,7 @@ export interface ConversationSummary {
 
 export type Block =
   | { type: 'text'; text: string }
+  | { type: 'file'; url: string; mime_type: string; name?: string }
   | { type: 'thinking'; thinking: string; signature: string }
   | { type: 'redacted_thinking'; data: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
@@ -56,6 +61,14 @@ export type Block =
 export interface Message {
   role: 'user' | 'assistant';
   content: Block[];
+}
+
+/** A file shown on a user bubble (and sent to the model as a file part). */
+export interface MessageAttachment {
+  name: string;
+  type: string;
+  url: string;
+  size?: number;
 }
 
 /** One thing the assistant did, in the order it happened. */
@@ -75,31 +88,35 @@ export interface Bubble {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  /** Uploaded files shown on a user bubble (thumbnails / chips). */
+  attachments?: MessageAttachment[];
   /** Everything that happened before the answer, in order. */
   steps?: Step[];
-  /** Rows to show as a table rather than prose. */
-  rows?: Array<Record<string, string>>;
-  total?: number | null;
+  /** Panel deep-links after a change (edit / view / file). */
   links?: Array<{ label: string; href: string }>;
+  /** Soft live status (e.g. reconnecting) shown instead of the default typing label. */
+  statusHint?: string | null;
   error?: { message: string; detail: string; retryable: boolean } | null;
 }
 
 export interface ProviderInfo {
   id: string;
   label: string;
-  models: Record<string, string>;
-  default_model: string;
-  reasoning_models: string[];
   configured: boolean;
 }
 
 export interface ServiceSettings {
   provider: string;
-  model: string;
-  thinking: boolean;
-  has_key: boolean;
   ready: boolean;
   providers: ProviderInfo[];
+  connectors_url: string;
+}
+
+export interface ConnectorTestResult {
+  ok: boolean;
+  message: string;
+  reply?: string;
+  detail?: string;
 }
 
 export interface Assessment {
@@ -137,6 +154,10 @@ export interface PendingConfirmation {
   collected: Block[];
   /** Calls from this turn that were not reached, which still owe a result. */
   skipped: string[];
+}
+
+export interface ChoiceSession {
+  questions: Array<{ id: string; prompt: string; options: string[] }>;
 }
 
 export interface StreamEvent {

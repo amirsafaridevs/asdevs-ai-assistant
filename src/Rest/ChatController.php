@@ -24,9 +24,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Streams one assistant turn to the browser.
  *
- * The AI service is reached from here, never from the browser, so the key
- * stays on the server (section 27.3). Answers are streamed as they arrive so
- * the person sees progress rather than silence (section 11.3).
+ * The WordPress AI Client is reached from here, never from the browser. API
+ * keys stay in Settings → Connectors. Answers are streamed as events so the
+ * person sees progress rather than silence (section 11.3).
  */
 final class ChatController extends Controller {
 
@@ -92,8 +92,11 @@ final class ChatController extends Controller {
 		if ( null === $provider ) {
 			return new WP_Error(
 				'asdevs_ai_not_configured',
-				__( 'The assistant needs an AI service before it can work.', 'asdevs-ai-assistant' ),
-				array( 'status' => 409 )
+				__( 'The assistant needs a configured WordPress AI connector before it can work. Open Settings → Connectors to connect a provider.', 'asdevs-ai-assistant' ),
+				array(
+					'status' => 409,
+					'detail' => $this->providers->not_ready_detail(),
+				)
 			);
 		}
 
@@ -174,13 +177,75 @@ final class ChatController extends Controller {
 				continue;
 			}
 
+			$blocks = $this->sanitize_content_blocks( $content );
+
+			if ( array() === $blocks ) {
+				continue;
+			}
+
 			$messages[] = array(
 				'role'    => $role,
-				'content' => array_values( $content ),
+				'content' => $blocks,
 			);
 		}
 
 		return $messages;
+	}
+
+	/**
+	 * Keep only content-block shapes the provider understands.
+	 *
+	 * @param array<mixed> $content Raw blocks from the browser.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function sanitize_content_blocks( array $content ): array {
+		$blocks = array();
+
+		foreach ( $content as $block ) {
+			if ( ! is_array( $block ) ) {
+				continue;
+			}
+
+			$type = isset( $block['type'] ) ? (string) $block['type'] : '';
+
+			if ( 'text' === $type ) {
+				$text = isset( $block['text'] ) ? (string) $block['text'] : '';
+
+				if ( '' !== $text ) {
+					$blocks[] = array(
+						'type' => 'text',
+						'text' => $text,
+					);
+				}
+
+				continue;
+			}
+
+			if ( 'file' === $type || 'image' === $type ) {
+				$url  = isset( $block['url'] ) ? esc_url_raw( (string) $block['url'] ) : '';
+				$mime = isset( $block['mime_type'] ) ? sanitize_mime_type( (string) $block['mime_type'] ) : '';
+				$name = isset( $block['name'] ) ? sanitize_file_name( (string) $block['name'] ) : '';
+
+				if ( '' === $url ) {
+					continue;
+				}
+
+				$blocks[] = array(
+					'type'      => 'file',
+					'url'       => $url,
+					'mime_type' => $mime,
+					'name'      => $name,
+				);
+
+				continue;
+			}
+
+			// Tool / thinking blocks are opaque to this layer — pass through as received.
+			$blocks[] = $block;
+		}
+
+		return $blocks;
 	}
 
 	/**

@@ -20,12 +20,14 @@ use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
 use ASDevs\AIAssistant\Discovery\CapabilityMap;
 use ASDevs\AIAssistant\Execution\ActionExecutor;
+use ASDevs\AIAssistant\Memory\MemoryStore;
 use ASDevs\AIAssistant\Rest\ActionController;
 use ASDevs\AIAssistant\Rest\BootstrapController;
 use ASDevs\AIAssistant\Rest\CapabilityController;
 use ASDevs\AIAssistant\Rest\ChatController;
 use ASDevs\AIAssistant\Rest\ConversationController;
 use ASDevs\AIAssistant\Rest\Controller;
+use ASDevs\AIAssistant\Rest\MemoryController;
 use ASDevs\AIAssistant\Rest\SettingsController;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -82,6 +84,11 @@ final class RestApiServiceProvider extends ServiceProvider {
 				$container->get( ProviderRegistry::class )
 			)
 		);
+
+		$this->container->singleton(
+			MemoryController::class,
+			static fn( Container $container ) => new MemoryController( $container->get( MemoryStore::class ) )
+		);
 	}
 
 	/**
@@ -115,6 +122,7 @@ final class RestApiServiceProvider extends ServiceProvider {
 			ChatController::class,
 			ConversationController::class,
 			SettingsController::class,
+			MemoryController::class,
 		);
 	}
 }

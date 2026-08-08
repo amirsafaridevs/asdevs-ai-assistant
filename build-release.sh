@@ -54,26 +54,37 @@ copy "${SLUG}.php"
 copy "uninstall.php"
 copy "readme.txt"
 copy "LICENSE"
+copy "composer.json"
 copy "src"
 copy "vendor"
 copy "assets/dist"
+copy "assets/admin"
 copy "languages"
+# Front-end source + build tooling (Guideline 4): reviewers must be able to
+# rebuild assets/dist without hunting for a private tree.
+copy "frontend"
 
-# Nothing that is only needed to develop or build the plugin ships.
+# Nothing that is only needed at develop-time on the machine ships.
 find "${STAGE_DIR}" \
   \( -name 'node_modules' -o -name '.git*' -o -name 'tests' -o -name 'test' \
-     -o -name 'docs' -o -name 'examples' -o -name '.idea' -o -name '.vscode' \) \
+     -o -name 'docs' -o -name 'examples' -o -name '.idea' -o -name '.vscode' \
+     -o -name 'plans' \) \
   -prune -exec rm -rf {} + 2>/dev/null || true
 
+# Drop junk and lockfiles from vendor/frontend, but keep composer.json and the
+# frontend package.json / source so the package stays reviewable and rebuildable.
 find "${STAGE_DIR}" -type f \( \
-  -name '*.map' -o -name '*.ts' -o -name '*.vue' -o -name '*.scss' \
-  -o -name '*.dist' -o -name '*.lock' -o -name '*.log' -o -name '*.zip' \
+  -name '*.map' -o -name '*.log' -o -name '*.zip' \
   -o -name '*.mp4' -o -name '*.MP4' -o -name '*.mov' \
   -o -name '.DS_Store' -o -name 'Thumbs.db' -o -name '.env*' \
-  -o -name 'phpunit.xml*' -o -name 'phpcs.xml*' -o -name 'composer.json' \
-  -o -name 'composer.lock' -o -name 'package.json' -o -name 'package-lock.json' \
+  -o -name 'phpunit.xml*' -o -name 'phpcs.xml*' \
+  -o -name 'composer.lock' \
   -o -name '*.yml' -o -name '*.yaml' -o -name 'Makefile' \) \
   -delete
+
+# package-lock is useful for reproducible frontend builds; keep it under frontend/.
+# Remove any stray root package files if they ever appear.
+rm -f "${STAGE_DIR}/package.json" "${STAGE_DIR}/package-lock.json"
 
 # Translations: template, compiled catalogues, and the JSON the widget reads.
 say "Building translations"

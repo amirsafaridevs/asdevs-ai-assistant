@@ -37,13 +37,16 @@ abstract class Controller {
 	/**
 	 * Whether the current request may use the assistant at all.
 	 *
+	 * Restricted to administrators so the site's AI connector cannot be
+	 * consumed by lower-privilege accounts.
+	 *
 	 * @return bool|WP_Error
 	 */
 	public function check_permission() {
-		if ( ! is_user_logged_in() || ! current_user_can( 'read' ) ) {
+		if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
 			return new WP_Error(
 				'asdevs_ai_not_allowed',
-				__( 'You need to be signed in to use the assistant.', 'asdevs-ai-assistant' ),
+				__( 'Only a site administrator can use the assistant.', 'asdevs-ai-assistant' ),
 				array( 'status' => rest_authorization_required_code() )
 			);
 		}

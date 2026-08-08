@@ -44,6 +44,7 @@ final class PageContext {
 			'base'      => (string) $screen->base,
 			'post_type' => (string) $screen->post_type,
 			'taxonomy'  => (string) $screen->taxonomy,
+			'title'     => function_exists( 'get_admin_page_title' ) ? wp_strip_all_tags( (string) get_admin_page_title() ) : '',
 		);
 
 		$object = $this->focused_object( $screen );

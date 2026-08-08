@@ -34,8 +34,11 @@ msgstr "از مدیر سایت بخواه آن را تنظیم کند."
 msgid "Assistant"
 msgstr "دستیار"
 
-msgid "Change a site setting"
-msgstr "تغییر یکی از تنظیمات سایت"
+#. translators: %s: number of plugins.
+msgid "Apply %s plugin update"
+msgid_plural "Apply %s plugin updates"
+msgstr[0] "اعمال %s به‌روزرسانی افزونه"
+msgstr[1] "اعمال %s به‌روزرسانی افزونه"
 
 msgid "Changes a site-wide setting."
 msgstr "یکی از تنظیمات کل سایت را تغییر می‌دهد."
@@ -49,12 +52,23 @@ msgstr "تغییر می‌دهد که این فرد چه کارهایی روی �
 msgid "Changing the site address can cut off access to the whole site and cannot be undone from inside the admin. I will not change it; open Settings and change it yourself carefully."
 msgstr "تغییر آدرس سایت می‌تواند دسترسی به کل سایت را قطع کند و از داخل پیشخوان قابل بازگشت نیست. من این کار را انجام نمی‌دهم؛ تنظیمات را باز کن و خودت با احتیاط تغییرش بده."
 
-#. translators: %s: number of plugins.
-msgid "Check the %s inactive plugins"
-msgstr "بررسی %s افزونه غیرفعال"
+#. translators: 1: number of items, 2: content type label, e.g. Posts.
+msgid "Check %1$s scheduled item in %2$s"
+msgid_plural "Check %1$s scheduled items in %2$s"
+msgstr[0] "بررسی %1$s مورد زمان‌بندی‌شده در %2$s"
+msgstr[1] "بررسی %1$s مورد زمان‌بندی‌شده در %2$s"
 
-msgid "Check the inactive plugins"
-msgstr "افزونه‌های غیرفعال را بررسی کن"
+#. translators: %s: number of plugins.
+msgid "Clean up %s inactive plugin"
+msgid_plural "Clean up %s inactive plugins"
+msgstr[0] "پاکسازی %s افزونه غیرفعال"
+msgstr[1] "پاکسازی %s افزونه غیرفعال"
+
+#. translators: 1: number of items, 2: content type label, e.g. Posts.
+msgid "Continue %1$s draft in %2$s"
+msgid_plural "Continue %1$s drafts in %2$s"
+msgstr[0] "ادامه %1$s پیش‌نویس در %2$s"
+msgstr[1] "ادامه %1$s پیش‌نویس در %2$s"
 
 msgid "Checking the details…"
 msgstr "در حال بررسی جزئیات…"
@@ -65,11 +79,14 @@ msgstr "بستن"
 msgid "Confirm this change"
 msgstr "تأیید این تغییر"
 
-msgid "Create a new post"
-msgstr "یک نوشته جدید بساز"
-
 msgid "Create the first page of the site"
 msgstr "اولین برگه سایت را بساز"
+
+msgid "Help me create a new post."
+msgstr "کمک کن یک نوشته جدید بسازم."
+
+msgid "Help me create the first page of this site."
+msgstr "کمک کن اولین برگه این سایت را بسازم."
 
 msgid "Delete every conversation"
 msgstr "حذف همه گفتگوها"
@@ -185,9 +202,9 @@ msgstr "در حال حذف…"
 msgid "Remove the saved key for this service"
 msgstr "کلید ذخیره‌شده این سرویس را حذف کن"
 
-#. translators: %s: number of plugins.
-msgid "Review the %s plugins with updates"
-msgstr "بررسی %s افزونه‌ای که به‌روزرسانی دارند"
+#. translators: %s: content type label.
+msgid "List drafts in %s and help me decide what to finish or publish next."
+msgstr "پیش‌نویس‌های %s را فهرست کن و کمک کن بفهمم کدام را تمام یا منتشر کنم."
 
 msgid "Save"
 msgstr "ذخیره"
@@ -209,19 +226,30 @@ msgid "Showing %1$s of %2$s."
 msgstr "%1$s مورد از %2$s مورد نمایش داده شده."
 
 #. translators: 1: number of items, 2: content type label, e.g. Posts.
-msgid "Show the %1$s waiting in %2$s"
-msgstr "%1$s مورد در انتظار در %2$s را نشان بده"
+msgid "Review %1$s pending item in %2$s"
+msgid_plural "Review %1$s pending items in %2$s"
+msgstr[0] "بازبینی %1$s مورد در انتظار تأیید در %2$s"
+msgstr[1] "بازبینی %1$s مورد در انتظار تأیید در %2$s"
+
+msgid "Review inactive plugins and suggest which ones are safe to remove."
+msgstr "افزونه‌های غیرفعال را بررسی کن و بگو کدام‌ها را می‌شود با خیال راحت حذف کرد."
 
 #. translators: %s: number of users.
-msgid "Show the %s people with access"
-msgstr "%s نفری که دسترسی دارند را نشان بده"
+msgid "Review who has access (%s person)"
+msgid_plural "Review who has access (%s people)"
+msgstr[0] "بازبینی دسترسی‌ها (%s نفر)"
+msgstr[1] "بازبینی دسترسی‌ها (%s نفر)"
 
 #. translators: %s: content type label.
-msgid "Show the drafts waiting in %s"
-msgstr "پیش‌نویس‌های در انتظار در %s را نشان بده"
+msgid "Show pending items in %s and summarize what needs approval."
+msgstr "موارد در انتظار تأیید در %s را نشان بده و خلاصه کن چه چیزی باید تأیید شود."
 
-msgid "Show the site users"
-msgstr "کاربران سایت را نشان بده"
+#. translators: %s: content type label.
+msgid "Show scheduled items in %s and confirm timing looks right."
+msgstr "موارد زمان‌بندی‌شده در %s را نشان بده و زمان‌بندی‌شان را بررسی کن."
+
+msgid "Show who has access to this site and what they can do."
+msgstr "نشان بده چه کسانی به این سایت دسترسی دارند و چه کارهایی می‌توانند بکنند."
 
 msgid "Something went wrong."
 msgstr "کاری از پیش نرفت."
@@ -286,20 +314,27 @@ msgstr "بدون عنوان"
 msgid "View on the site"
 msgstr "دیدن روی سایت"
 
+msgid "Update a site setting"
+msgstr "به‌روزرسانی یکی از تنظیمات سایت"
+
 msgid "What would you like to do on your site today?"
 msgstr "امروز می‌خواهی چه کاری روی سایتت انجام دهیم؟"
 
-msgid "Which plugins have updates?"
-msgstr "کدام افزونه‌ها به‌روزرسانی دارند؟"
+msgid "Which plugins have updates available, and which should we apply first?"
+msgstr "کدام افزونه‌ها به‌روزرسانی دارند و کدام را اول اعمال کنیم؟"
 
-msgid "Which site settings can you change?"
-msgstr "کدام تنظیمات سایت را می‌توانی تغییر بدهی؟"
+msgid "Which site settings can you help me change right now?"
+msgstr "الان کدام تنظیمات سایت را می‌توانی کمک کنی تغییر دهم؟"
 
 msgid "Working on it…"
 msgstr "در حال انجام…"
 
 msgid "Write a new post"
 msgstr "نوشتن یک مطلب تازه"
+
+#. translators: %s: site name.
+msgid "Write a new post for %s"
+msgstr "نوشتن یک مطلب تازه برای %s"
 
 msgid "Yes, do it"
 msgstr "بله، انجامش بده"

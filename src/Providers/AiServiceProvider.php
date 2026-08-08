@@ -11,21 +11,20 @@ namespace ASDevs\AIAssistant\Providers;
 
 use ASDevs\AIAssistant\Ai\AiProvider;
 use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Ai\Providers\AnthropicProvider;
-use ASDevs\AIAssistant\Ai\Providers\OpenAiProvider;
 use ASDevs\AIAssistant\Ai\Settings;
 use ASDevs\AIAssistant\Ai\SystemPrompt;
 use ASDevs\AIAssistant\Ai\ToolCatalog;
 use ASDevs\AIAssistant\Context\SiteSnapshot;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Memory\MemoryStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Registers the AI layer.
+ * Registers the AI layer on top of WordPress core connectors.
  */
 final class AiServiceProvider extends ServiceProvider {
 
@@ -37,7 +36,10 @@ final class AiServiceProvider extends ServiceProvider {
 
 		$this->container->singleton(
 			SystemPrompt::class,
-			static fn( Container $container ) => new SystemPrompt( $container->get( SiteSnapshot::class ) )
+			static fn( Container $container ) => new SystemPrompt(
+				$container->get( SiteSnapshot::class ),
+				$container->get( MemoryStore::class )
+			)
 		);
 
 		$this->container->singleton(
@@ -46,18 +48,17 @@ final class AiServiceProvider extends ServiceProvider {
 				$settings = $container->get( Settings::class );
 				$registry = new ProviderRegistry( $settings );
 
-				$registry->add( new AnthropicProvider( $settings ) );
-				$registry->add( new OpenAiProvider( $settings ) );
-
 				/**
 				 * Filter the AI providers a site can choose from.
 				 *
-				 * A site can add its own service without touching this plugin.
+				 * Prefer WordPress connectors discovered via Settings → Connectors.
+				 * Extra providers can still be added for advanced sites.
 				 *
-				 * @param AiProvider[] $extra    Extra providers.
-				 * @param Settings     $settings Stored settings.
+				 * @param AiProvider[]     $extra    Extra providers.
+				 * @param Settings         $settings Stored settings.
+				 * @param ProviderRegistry $registry Registry being built.
 				 */
-				$extra = apply_filters( 'asdevs_ai_assistant_providers', array(), $settings );
+				$extra = apply_filters( 'asdevs_ai_assistant_providers', array(), $settings, $registry );
 
 				foreach ( (array) $extra as $provider ) {
 					if ( $provider instanceof AiProvider ) {
@@ -66,6 +67,18 @@ final class AiServiceProvider extends ServiceProvider {
 				}
 
 				return $registry;
+			}
+		);
+	}
+
+	/**
+	 * Wire WordPress AI Client defaults.
+	 */
+	public function boot(): void {
+		add_filter(
+			'wp_ai_client_default_request_timeout',
+			static function ( $timeout ) {
+				return max( (float) $timeout, 120.0 );
 			}
 		);
 	}

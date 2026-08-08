@@ -110,6 +110,71 @@ final class ToolCatalog {
 					'required'   => array( 'path', 'label' ),
 				),
 			),
+			array(
+				'name'         => 'memory_list',
+				'description'  => 'List every persistent memory row stored for this site (id, content, timestamps). Use when you need the full set or after writing/deleting.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => (object) array(),
+				),
+			),
+			array(
+				'name'         => 'memory_write',
+				'description'  => 'Create or update a persistent memory note. Omit id to create; include id to update an existing row. Keep content short and factual.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'content' => array(
+							'type'        => 'string',
+							'description' => 'The note to remember.',
+						),
+						'id'      => array(
+							'type'        => 'string',
+							'description' => 'Existing memory id when updating.',
+						),
+					),
+					'required'   => array( 'content' ),
+				),
+			),
+			array(
+				'name'         => 'memory_delete',
+				'description'  => 'Delete one persistent memory row by id.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'id' => array(
+							'type'        => 'string',
+							'description' => 'Memory id to delete.',
+						),
+					),
+					'required'   => array( 'id' ),
+				),
+			),
+			array(
+				'name'         => 'read_current_page',
+				'description'  => 'Read the visible text of the admin page where the assistant panel is open (page title, headings, main content). Never changes anything.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => (object) array(),
+				),
+			),
+			array(
+				'name'         => 'highlight_on_page',
+				'description'  => 'Visually highlight an element on the current admin page so the person can see it. Provide a CSS selector and/or visible text to match.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'selector' => array(
+							'type'        => 'string',
+							'description' => 'CSS selector for the target element, for example "#title" or ".wp-heading-inline".',
+						),
+						'text'     => array(
+							'type'        => 'string',
+							'description' => 'Visible text contained by the element to highlight.',
+						),
+					),
+				),
+			),
 		);
 	}
 
@@ -119,6 +184,14 @@ final class ToolCatalog {
 	 * @return string[]
 	 */
 	public function read_only(): array {
-		return array( 'list_capabilities', 'describe_capability', 'read_site', 'open_admin_page' );
+		return array(
+			'list_capabilities',
+			'describe_capability',
+			'read_site',
+			'open_admin_page',
+			'memory_list',
+			'read_current_page',
+			'highlight_on_page',
+		);
 	}
 }

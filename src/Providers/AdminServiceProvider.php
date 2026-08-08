@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers the single setup screen.
+ * Registers the top-level AI Assistant admin screen.
  */
 final class AdminServiceProvider extends ServiceProvider {
 
@@ -48,6 +48,7 @@ final class AdminServiceProvider extends ServiceProvider {
 		$page = $this->container->get( SettingsPage::class );
 
 		add_action( 'admin_menu', array( $page, 'register_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( $page, 'enqueue_assets' ) );
 		add_action( 'admin_post_asdevs_ai_assistant_save_settings', array( $page, 'handle_save' ) );
 	}
 }

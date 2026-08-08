@@ -51,15 +51,27 @@ final class StartSuggestions {
 			$suggestions[] = $suggestion;
 		}
 
-		foreach ( $this->from_plugins( $snapshot ) as $suggestion ) {
+		foreach ( $this->from_plugin_updates( $snapshot ) as $suggestion ) {
+			if ( count( $suggestions ) >= 4 ) {
+				break;
+			}
+
 			$suggestions[] = $suggestion;
 		}
 
-		if ( $this->site_is_empty( $snapshot ) ) {
+		if ( $this->site_is_empty( $snapshot ) && count( $suggestions ) < 4 ) {
 			$suggestions[] = array(
 				'label'  => __( 'Create the first page of the site', 'asdevs-ai-assistant' ),
-				'prompt' => __( 'Create the first page of the site', 'asdevs-ai-assistant' ),
+				'prompt' => __( 'Help me create the first page of this site.', 'asdevs-ai-assistant' ),
 			);
+		}
+
+		foreach ( $this->from_inactive_plugins( $snapshot ) as $suggestion ) {
+			if ( count( $suggestions ) >= 4 ) {
+				break;
+			}
+
+			$suggestions[] = $suggestion;
 		}
 
 		foreach ( $this->baseline( $snapshot ) as $suggestion ) {
@@ -74,34 +86,111 @@ final class StartSuggestions {
 	}
 
 	/**
-	 * Suggestions that come from unfinished content.
+	 * Suggestions from unfinished or upcoming content, highest-signal first.
 	 *
 	 * @param array<string, mixed> $snapshot Site snapshot.
 	 *
 	 * @return array<int, array<string, string>>
 	 */
 	private function from_content( array $snapshot ): array {
-		$suggestions = array();
-		$types       = isset( $snapshot['content'] ) && is_array( $snapshot['content'] ) ? $snapshot['content'] : array();
+		$types      = isset( $snapshot['content'] ) && is_array( $snapshot['content'] ) ? $snapshot['content'] : array();
+		$candidates = array();
 
 		foreach ( $types as $type ) {
-			$waiting = (int) $type['draft'] + (int) $type['pending'];
+			if ( ! is_array( $type ) ) {
+				continue;
+			}
 
-			if ( $waiting > 0 ) {
-				$suggestions[] = array(
+			$label   = (string) ( $type['label'] ?? '' );
+			$pending = (int) ( $type['pending'] ?? 0 );
+			$draft   = (int) ( $type['draft'] ?? 0 );
+			$future  = (int) ( $type['future'] ?? 0 );
+
+			if ( '' === $label ) {
+				continue;
+			}
+
+			if ( $pending > 0 ) {
+				$candidates[] = array(
+					'weight' => 300 + min( $pending, 50 ),
 					'label'  => sprintf(
 						/* translators: 1: number of items, 2: content type label, e.g. Posts. */
-						__( 'Show the %1$s waiting in %2$s', 'asdevs-ai-assistant' ),
-						number_format_i18n( $waiting ),
-						$type['label']
+						_n(
+							'Review %1$s pending item in %2$s',
+							'Review %1$s pending items in %2$s',
+							$pending,
+							'asdevs-ai-assistant'
+						),
+						number_format_i18n( $pending ),
+						$label
 					),
 					'prompt' => sprintf(
 						/* translators: %s: content type label. */
-						__( 'Show the drafts waiting in %s', 'asdevs-ai-assistant' ),
-						$type['label']
+						__( 'Show pending items in %s and summarize what needs approval.', 'asdevs-ai-assistant' ),
+						$label
 					),
 				);
 			}
+
+			if ( $draft > 0 ) {
+				$candidates[] = array(
+					'weight' => 200 + min( $draft, 50 ),
+					'label'  => sprintf(
+						/* translators: 1: number of items, 2: content type label, e.g. Posts. */
+						_n(
+							'Continue %1$s draft in %2$s',
+							'Continue %1$s drafts in %2$s',
+							$draft,
+							'asdevs-ai-assistant'
+						),
+						number_format_i18n( $draft ),
+						$label
+					),
+					'prompt' => sprintf(
+						/* translators: %s: content type label. */
+						__( 'List drafts in %s and help me decide what to finish or publish next.', 'asdevs-ai-assistant' ),
+						$label
+					),
+				);
+			}
+
+			if ( $future > 0 ) {
+				$candidates[] = array(
+					'weight' => 100 + min( $future, 30 ),
+					'label'  => sprintf(
+						/* translators: 1: number of items, 2: content type label, e.g. Posts. */
+						_n(
+							'Check %1$s scheduled item in %2$s',
+							'Check %1$s scheduled items in %2$s',
+							$future,
+							'asdevs-ai-assistant'
+						),
+						number_format_i18n( $future ),
+						$label
+					),
+					'prompt' => sprintf(
+						/* translators: %s: content type label. */
+						__( 'Show scheduled items in %s and confirm timing looks right.', 'asdevs-ai-assistant' ),
+						$label
+					),
+				);
+			}
+		}
+
+		usort(
+			$candidates,
+			static function ( array $left, array $right ): int {
+				return (int) $right['weight'] <=> (int) $left['weight'];
+			}
+		);
+
+		$suggestions = array();
+
+		foreach ( $candidates as $candidate ) {
+			$suggestions[] = array(
+				'label'  => (string) $candidate['label'],
+				'prompt' => (string) $candidate['prompt'],
+			);
 
 			if ( count( $suggestions ) >= 2 ) {
 				break;
@@ -112,44 +201,67 @@ final class StartSuggestions {
 	}
 
 	/**
-	 * Suggestions that come from the plugin situation.
+	 * High-priority maintenance: available plugin updates.
 	 *
 	 * @param array<string, mixed> $snapshot Site snapshot.
 	 *
 	 * @return array<int, array<string, string>>
 	 */
-	private function from_plugins( array $snapshot ): array {
+	private function from_plugin_updates( array $snapshot ): array {
 		$plugins = isset( $snapshot['plugins'] ) && is_array( $snapshot['plugins'] ) ? $snapshot['plugins'] : array();
+		$updates = (int) ( $plugins['updates'] ?? 0 );
 
-		if ( empty( $plugins ) ) {
+		if ( $updates < 1 ) {
 			return array();
 		}
 
-		$suggestions = array();
-
-		if ( ( $plugins['updates'] ?? 0 ) > 0 ) {
-			$suggestions[] = array(
+		return array(
+			array(
 				'label'  => sprintf(
 					/* translators: %s: number of plugins. */
-					__( 'Review the %s plugins with updates', 'asdevs-ai-assistant' ),
-					number_format_i18n( (int) $plugins['updates'] )
+					_n(
+						'Apply %s plugin update',
+						'Apply %s plugin updates',
+						$updates,
+						'asdevs-ai-assistant'
+					),
+					number_format_i18n( $updates )
 				),
-				'prompt' => __( 'Which plugins have updates?', 'asdevs-ai-assistant' ),
-			);
+				'prompt' => __( 'Which plugins have updates available, and which should we apply first?', 'asdevs-ai-assistant' ),
+			),
+		);
+	}
+
+	/**
+	 * Lower-priority housekeeping for unused plugins.
+	 *
+	 * @param array<string, mixed> $snapshot Site snapshot.
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	private function from_inactive_plugins( array $snapshot ): array {
+		$plugins  = isset( $snapshot['plugins'] ) && is_array( $snapshot['plugins'] ) ? $snapshot['plugins'] : array();
+		$inactive = (int) ( $plugins['inactive'] ?? 0 );
+
+		if ( $inactive < 3 ) {
+			return array();
 		}
 
-		if ( ( $plugins['inactive'] ?? 0 ) >= 3 ) {
-			$suggestions[] = array(
+		return array(
+			array(
 				'label'  => sprintf(
 					/* translators: %s: number of plugins. */
-					__( 'Check the %s inactive plugins', 'asdevs-ai-assistant' ),
-					number_format_i18n( (int) $plugins['inactive'] )
+					_n(
+						'Clean up %s inactive plugin',
+						'Clean up %s inactive plugins',
+						$inactive,
+						'asdevs-ai-assistant'
+					),
+					number_format_i18n( $inactive )
 				),
-				'prompt' => __( 'Check the inactive plugins', 'asdevs-ai-assistant' ),
-			);
-		}
-
-		return $suggestions;
+				'prompt' => __( 'Review inactive plugins and suggest which ones are safe to remove.', 'asdevs-ai-assistant' ),
+			),
+		);
 	}
 
 	/**
@@ -162,29 +274,43 @@ final class StartSuggestions {
 	private function baseline( array $snapshot ): array {
 		$can         = isset( $snapshot['user']['can'] ) && is_array( $snapshot['user']['can'] ) ? $snapshot['user']['can'] : array();
 		$suggestions = array();
+		$site_name   = isset( $snapshot['site']['name'] ) ? trim( (string) $snapshot['site']['name'] ) : '';
 
 		if ( ! empty( $can['edit_posts'] ) ) {
 			$suggestions[] = array(
-				'label'  => __( 'Write a new post', 'asdevs-ai-assistant' ),
-				'prompt' => __( 'Create a new post', 'asdevs-ai-assistant' ),
+				'label'  => '' !== $site_name
+					? sprintf(
+						/* translators: %s: site name. */
+						__( 'Write a new post for %s', 'asdevs-ai-assistant' ),
+						$site_name
+					)
+					: __( 'Write a new post', 'asdevs-ai-assistant' ),
+				'prompt' => __( 'Help me create a new post.', 'asdevs-ai-assistant' ),
 			);
 		}
 
 		if ( ! empty( $can['list_users'] ) && null !== ( $snapshot['users'] ?? null ) ) {
+			$users = (int) $snapshot['users'];
+
 			$suggestions[] = array(
 				'label'  => sprintf(
 					/* translators: %s: number of users. */
-					__( 'Show the %s people with access', 'asdevs-ai-assistant' ),
-					number_format_i18n( (int) $snapshot['users'] )
+					_n(
+						'Review who has access (%s person)',
+						'Review who has access (%s people)',
+						$users,
+						'asdevs-ai-assistant'
+					),
+					number_format_i18n( $users )
 				),
-				'prompt' => __( 'Show the site users', 'asdevs-ai-assistant' ),
+				'prompt' => __( 'Show who has access to this site and what they can do.', 'asdevs-ai-assistant' ),
 			);
 		}
 
 		if ( ! empty( $can['manage_options'] ) ) {
 			$suggestions[] = array(
-				'label'  => __( 'Change a site setting', 'asdevs-ai-assistant' ),
-				'prompt' => __( 'Which site settings can you change?', 'asdevs-ai-assistant' ),
+				'label'  => __( 'Update a site setting', 'asdevs-ai-assistant' ),
+				'prompt' => __( 'Which site settings can you help me change right now?', 'asdevs-ai-assistant' ),
 			);
 		}
 
@@ -200,7 +326,14 @@ final class StartSuggestions {
 		$types = isset( $snapshot['content'] ) && is_array( $snapshot['content'] ) ? $snapshot['content'] : array();
 
 		foreach ( $types as $type ) {
-			$total = (int) $type['publish'] + (int) $type['draft'] + (int) $type['pending'] + (int) $type['future'];
+			if ( ! is_array( $type ) ) {
+				continue;
+			}
+
+			$total = (int) ( $type['publish'] ?? 0 )
+				+ (int) ( $type['draft'] ?? 0 )
+				+ (int) ( $type['pending'] ?? 0 )
+				+ (int) ( $type['future'] ?? 0 );
 
 			if ( $total > 0 ) {
 				return false;

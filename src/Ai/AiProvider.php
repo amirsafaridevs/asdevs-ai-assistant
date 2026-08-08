@@ -18,7 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Section 14.1: the product depends on no particular AI service, and section
  * 28.3 requires the AI layer to be replaceable without touching the rest of
- * the product. Nothing outside this namespace knows which service is in use.
+ * the product. The default implementations use WordPress core connectors via
+ * the AI Client (`wp_ai_client_prompt()`).
  */
 interface AiProvider {
 

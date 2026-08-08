@@ -36,18 +36,6 @@ final class AssetServiceProvider extends ServiceProvider {
 	public function boot(): void {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 		add_action( 'admin_footer', array( $this, 'render_root' ) );
-		add_action( 'init', array( $this, 'load_translations' ) );
-	}
-
-	/**
-	 * Load the plugin's translations.
-	 */
-	public function load_translations(): void {
-		load_plugin_textdomain(
-			'asdevs-ai-assistant',
-			false,
-			dirname( plugin_basename( ASDEVS_AI_ASSISTANT_FILE ) ) . '/languages'
-		);
 	}
 
 	/**
@@ -123,7 +111,7 @@ final class AssetServiceProvider extends ServiceProvider {
 	 * Whether the widget belongs on this screen.
 	 */
 	private function should_load(): bool {
-		if ( ! is_admin() || ! is_user_logged_in() || ! current_user_can( 'read' ) ) {
+		if ( ! is_admin() || ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
 			return false;
 		}
 

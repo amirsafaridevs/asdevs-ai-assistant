@@ -14,6 +14,7 @@ use ASDevs\AIAssistant\Context\SiteSnapshot;
 use ASDevs\AIAssistant\Context\StartSuggestions;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Memory\MemoryStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -30,6 +31,7 @@ final class ContextServiceProvider extends ServiceProvider {
 	public function register(): void {
 		$this->container->singleton( SiteSnapshot::class, static fn() => new SiteSnapshot() );
 		$this->container->singleton( PageContext::class, static fn() => new PageContext() );
+		$this->container->singleton( MemoryStore::class, static fn() => new MemoryStore() );
 
 		$this->container->singleton(
 			StartSuggestions::class,

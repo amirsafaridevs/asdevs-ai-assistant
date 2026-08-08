@@ -1,6 +1,7 @@
 import type {
   BootData,
   Bootstrap,
+  ConnectorTestResult,
   ConversationSummary,
   Message,
   Outcome,
@@ -69,8 +70,11 @@ export const api = {
 
   settings: () => request<ServiceSettings>('/settings'),
 
-  saveSettings: (payload: { provider: string; model: string; key: string; thinking: boolean }) =>
+  saveSettings: (payload: { provider: string }) =>
     request<ServiceSettings>('/settings', { method: 'POST', body: JSON.stringify(payload) }),
+
+  testConnector: (provider: string) =>
+    request<ConnectorTestResult>('/settings/test', { method: 'POST', body: JSON.stringify({ provider }) }),
 
   conversations: () => request<ConversationSummary[]>('/conversations'),
 
@@ -82,13 +86,32 @@ export const api = {
   deleteConversation: (id: string) => request<{ deleted: boolean }>(`/conversations/${id}`, { method: 'DELETE' }),
 
   clearConversations: () => request<{ deleted: boolean }>('/conversations', { method: 'DELETE' }),
+
+  memoryList: () => request<{ items: Array<Record<string, unknown>> }>('/memory'),
+
+  memoryWrite: (payload: { content: string; id?: string }) =>
+    request<{ item: Record<string, unknown> }>('/memory', { method: 'POST', body: JSON.stringify(payload) }),
+
+  memoryDelete: (id: string) =>
+    request<{ deleted: boolean; id: string }>(`/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 };
+
+/** Page context merged with the live browser title for the model. */
+export function currentPage(): BootData['page'] {
+  const title = typeof document !== 'undefined' ? document.title : '';
+
+  return {
+    ...boot.page,
+    title: boot.page.title || title,
+    document_title: title,
+  };
+}
 
 /**
  * Stream one assistant turn.
  *
  * The AI service is never contacted from here — this talks to the site, which
- * holds the key.
+ * uses the WordPress AI connector configured under Settings → Connectors.
  */
 export async function streamChat(
   messages: Message[],
@@ -103,16 +126,25 @@ export async function streamChat(
       'Content-Type': 'application/json',
       'X-WP-Nonce': boot.nonce,
     },
-    body: JSON.stringify({ messages, page: boot.page }),
+    body: JSON.stringify({ messages, page: currentPage() }),
   });
 
   if (!response.ok || !response.body) {
-    const body = await response.json().catch(() => ({}));
+    const body = (await response.json().catch(() => ({}))) as {
+      message?: string;
+      code?: string;
+      data?: { status?: number; detail?: string };
+    };
+    const detail =
+      (typeof body.data?.detail === 'string' && body.data.detail.trim() !== ''
+        ? body.data.detail
+        : '') ||
+      [body.code, `HTTP ${response.status}`].filter(Boolean).join(' · ');
 
     onEvent({
       type: 'error',
-      message: (body as { message?: string }).message ?? __('The assistant could not be reached.'),
-      detail: `HTTP ${response.status}`,
+      message: body.message ?? __('The assistant could not be reached.'),
+      detail,
       retryable: response.status !== 409,
     });
 

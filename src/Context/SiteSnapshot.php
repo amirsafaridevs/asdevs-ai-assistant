@@ -42,6 +42,7 @@ final class SiteSnapshot {
 		$this->memo = array(
 			'site'    => array(
 				'name'         => get_bloginfo( 'name' ),
+				'description'  => get_bloginfo( 'description' ),
 				'locale'       => get_user_locale(),
 				'admin_locale' => get_locale(),
 				'timezone'     => wp_timezone_string(),
@@ -53,7 +54,7 @@ final class SiteSnapshot {
 			),
 			'user'    => $this->current_user(),
 			'content' => $this->content_counts(),
-			'plugins' => $this->plugin_counts(),
+			'plugins' => $this->plugin_inventory(),
 			'users'   => $this->user_count(),
 		);
 
@@ -119,11 +120,11 @@ final class SiteSnapshot {
 	}
 
 	/**
-	 * Plugin counts, only when the user may see plugins.
+	 * Installed plugins with active/inactive status, when allowed.
 	 *
-	 * @return array<string, int>
+	 * @return array<string, mixed>
 	 */
-	private function plugin_counts(): array {
+	private function plugin_inventory(): array {
 		if ( ! current_user_can( 'activate_plugins' ) ) {
 			return array();
 		}
@@ -132,16 +133,36 @@ final class SiteSnapshot {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
 
-		$all    = get_plugins();
-		$active = (array) get_option( 'active_plugins', array() );
-		$counts = get_site_transient( 'update_plugins' );
+		$all     = get_plugins();
+		$active  = (array) get_option( 'active_plugins', array() );
+		$counts  = get_site_transient( 'update_plugins' );
 		$updates = isset( $counts->response ) && is_array( $counts->response ) ? count( $counts->response ) : 0;
+
+		$active_names   = array();
+		$inactive_names = array();
+
+		foreach ( $all as $file => $plugin ) {
+			$name = isset( $plugin['Name'] ) ? (string) $plugin['Name'] : (string) $file;
+
+			if ( in_array( $file, $active, true ) ) {
+				$active_names[] = $name;
+			} else {
+				$inactive_names[] = $name;
+			}
+		}
+
+		sort( $active_names, SORT_NATURAL | SORT_FLAG_CASE );
+		sort( $inactive_names, SORT_NATURAL | SORT_FLAG_CASE );
 
 		return array(
 			'total'    => count( $all ),
-			'active'   => count( $active ),
-			'inactive' => max( 0, count( $all ) - count( $active ) ),
+			'active'   => count( $active_names ),
+			'inactive' => count( $inactive_names ),
 			'updates'  => $updates,
+			'list'     => array(
+				'active'   => $active_names,
+				'inactive' => $inactive_names,
+			),
 		);
 	}
 
