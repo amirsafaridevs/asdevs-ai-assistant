@@ -117,7 +117,7 @@ Hard refusals include (among others): deleting your own account, raising your ow
 
 You can talk to the agent in **any language**. It replies in the language you write — that is a property of the AI model, not a limit of this plugin.
 
-The plugin’s own interface language is **English**. Translation files ship with the plugin for other locales (including Persian), and contributions through standard WordPress i18n are welcome.
+The plugin’s own interface language is **English**. A translation template (`.pot`) ships under `languages/`. Contributions of locale files through standard WordPress i18n (`.po` / `.mo`) are welcome.
 
 = Requirements =
 
@@ -249,7 +249,7 @@ No. This plugin does not send data to ASDevs servers and does not include teleme
 
 You can ask questions and give instructions in **any language**. The model answers in the language you write.
 
-The plugin UI itself is English. Locale translation files are included for other languages where available (for example Persian). You can translate or improve locales with the usual WordPress `.po` / `.mo` workflow.
+The plugin UI itself is English. A `.pot` template ships under `languages/`. You can contribute or improve locales with the usual WordPress `.po` / `.mo` workflow.
 
 = Does it replace the WordPress admin? =
 
@@ -300,7 +300,7 @@ This release is built on WordPress core AI connectors and the AI Client so the p
 * Persistent on-site memory notes and per-user conversation history with real deletion.
 * Three-level risk policy and hard never-rules enforced on the server, with confirmation tokens for risky writes.
 * Terms acceptance gate, settings screen for preferred connector, floating assistant on every admin screen.
-* Chat in any language; English UI with locale translation files included.
+* Chat in any language; English UI with a shippable `.pot` for community translations.
 * Clean uninstall of plugin-owned data.
 
 == Upgrade Notice ==

@@ -67,7 +67,7 @@ Hard refusals include deleting your own account, raising your own role, changing
 
 You can talk to the agent in **any language**. It replies in the language you write — that comes from the AI model, not from a two-language limit in this plugin.
 
-The plugin UI is **English**. Translation files ship under `languages/` for other locales (including Persian). Contributions through standard WordPress i18n (`.pot` / `.po`) are welcome.
+The plugin UI is **English**. A translation template ships under `languages/` (`.pot`). Contributions of locale files through standard WordPress i18n (`.po` / `.mo`) are welcome.
 
 ---
 
@@ -248,7 +248,7 @@ On your WordPress site, per user. Delete anytime. Uninstall removes plugin-owned
 <details>
 <summary><strong>Which languages can I use?</strong></summary>
 
-Any language for chat — the model answers in the language you write. The plugin UI is English; locale files under `languages/` cover other languages where available (including Persian).
+Any language for chat — the model answers in the language you write. The plugin UI is English. A `.pot` template ships under `languages/` so locales can be contributed through the usual WordPress i18n workflow.
 </details>
 
 <details>
