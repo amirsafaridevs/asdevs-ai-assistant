@@ -1,0 +1,370 @@
+# Persian translation for ASDevs AI Assistant.
+# Copyright (C) 2026 ASDevs
+# This file is distributed under the GPL-2.0-or-later license.
+msgid ""
+msgstr ""
+"Project-Id-Version: ASDevs AI Assistant 1.0.0\n"
+"Report-Msgid-Bugs-To: https://asdevs.ir/ai-assistant\n"
+"PO-Revision-Date: 2026-08-05 00:00+0000\n"
+"Last-Translator: ASDevs\n"
+"Language-Team: ASDevs\n"
+"Language: fa_IR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Domain: asdevs-ai-assistant\n"
+
+#. translators: %s: number of items, already localized.
+msgid "%s items will be changed."
+msgstr "%s مورد تغییر می‌کند."
+
+msgid "A key is saved. Leave blank to keep it."
+msgstr "یک کلید ذخیره شده است. برای حفظ آن، این کادر را خالی بگذار."
+
+msgid "AI Assistant"
+msgstr "دستیار هوشمند"
+
+msgid "Activates a plugin, which starts running its code on the site."
+msgstr "یک افزونه را فعال می‌کند و کد آن روی سایت اجرا می‌شود."
+
+msgid "Ask an administrator of this site to set it up."
+msgstr "از مدیر سایت بخواه آن را تنظیم کند."
+
+msgid "Assistant"
+msgstr "دستیار"
+
+#. translators: %s: number of plugins.
+msgid "Apply %s plugin update"
+msgid_plural "Apply %s plugin updates"
+msgstr[0] "اعمال %s به‌روزرسانی افزونه"
+msgstr[1] "اعمال %s به‌روزرسانی افزونه"
+
+msgid "Changes a site-wide setting."
+msgstr "یکی از تنظیمات کل سایت را تغییر می‌دهد."
+
+msgid "Changes something that can be changed back."
+msgstr "چیزی را تغییر می‌دهد که قابل بازگرداندن است."
+
+msgid "Changes what this person can do on the site."
+msgstr "تغییر می‌دهد که این فرد چه کارهایی روی سایت می‌تواند انجام دهد."
+
+msgid "Changing the site address can cut off access to the whole site and cannot be undone from inside the admin. I will not change it; open Settings and change it yourself carefully."
+msgstr "تغییر آدرس سایت می‌تواند دسترسی به کل سایت را قطع کند و از داخل پیشخوان قابل بازگشت نیست. من این کار را انجام نمی‌دهم؛ تنظیمات را باز کن و خودت با احتیاط تغییرش بده."
+
+#. translators: 1: number of items, 2: content type label, e.g. Posts.
+msgid "Check %1$s scheduled item in %2$s"
+msgid_plural "Check %1$s scheduled items in %2$s"
+msgstr[0] "بررسی %1$s مورد زمان‌بندی‌شده در %2$s"
+msgstr[1] "بررسی %1$s مورد زمان‌بندی‌شده در %2$s"
+
+#. translators: %s: number of plugins.
+msgid "Clean up %s inactive plugin"
+msgid_plural "Clean up %s inactive plugins"
+msgstr[0] "پاکسازی %s افزونه غیرفعال"
+msgstr[1] "پاکسازی %s افزونه غیرفعال"
+
+#. translators: 1: number of items, 2: content type label, e.g. Posts.
+msgid "Continue %1$s draft in %2$s"
+msgid_plural "Continue %1$s drafts in %2$s"
+msgstr[0] "ادامه %1$s پیش‌نویس در %2$s"
+msgstr[1] "ادامه %1$s پیش‌نویس در %2$s"
+
+msgid "Checking the details…"
+msgstr "در حال بررسی جزئیات…"
+
+msgid "Close"
+msgstr "بستن"
+
+msgid "Confirm this change"
+msgstr "تأیید این تغییر"
+
+msgid "Create the first page of the site"
+msgstr "اولین برگه سایت را بساز"
+
+msgid "Help me create a new post."
+msgstr "کمک کن یک نوشته جدید بسازم."
+
+msgid "Help me create the first page of this site."
+msgstr "کمک کن اولین برگه این سایت را بسازم."
+
+msgid "Delete every conversation"
+msgstr "حذف همه گفتگوها"
+
+msgid "Delete this conversation"
+msgstr "حذف این گفتگو"
+
+msgid "Deletes the item permanently. This cannot be undone."
+msgstr "این مورد را برای همیشه حذف می‌کند. این کار قابل بازگشت نیست."
+
+msgid "Deleting your own account would sign you out with no way back. Do it from another administrator account if you really want to."
+msgstr "حذف حساب خودت باعث می‌شود از پیشخوان خارج شوی و راه برگشتی نداشته باشی. اگر واقعاً می‌خواهی، از یک حساب مدیر دیگر انجامش بده."
+
+#. translators: 1: content type, e.g. Post. 2: item title.
+msgid "Editing the %1$s \"%2$s\""
+msgstr "در حال ویرایش %1$s «%2$s»"
+
+#. translators: %s: person's name.
+msgid "Editing the account of %s"
+msgstr "در حال ویرایش حساب %s"
+
+msgid "History"
+msgstr "تاریخچه"
+
+msgid "I could not find that capability on this site."
+msgstr "این قابلیت را روی این سایت پیدا نکردم."
+
+msgid "I do not change your own access level. Ask another administrator to do it."
+msgstr "سطح دسترسی خودت را تغییر نمی‌دهم. از یک مدیر دیگر بخواه این کار را بکند."
+
+msgid "I do not delete a whole collection in one go. Tell me which specific items to remove."
+msgstr "یک مجموعه کامل را یکجا حذف نمی‌کنم. بگو دقیقاً کدام موردها حذف شوند."
+
+msgid "I do not edit site files."
+msgstr "فایل‌های سایت را ویرایش نمی‌کنم."
+
+msgid "I do not install code on the site. I can open the install page for you instead."
+msgstr "کدی روی سایت نصب نمی‌کنم. در عوض می‌توانم صفحه نصب را برایت باز کنم."
+
+msgid "I do not send messages to your site members. Use the plugin that owns that feature."
+msgstr "برای اعضای سایتت پیام نمی‌فرستم. از افزونه‌ای که این قابلیت را دارد استفاده کن."
+
+msgid "Items affected:"
+msgstr "موارد تحت تأثیر:"
+
+#. translators: %s: content type label, e.g. Posts.
+msgid "Looking at the list of %s"
+msgstr "در فهرست %s"
+
+msgid "Looking at the list of people with access"
+msgstr "در فهرست افرادی که دسترسی دارند"
+
+msgid "Looking at the plugin list"
+msgstr "در فهرست افزونه‌ها"
+
+msgid "Looking at what your site can do…"
+msgstr "در حال بررسی امکانات سایتت…"
+
+msgid "Makes content visible on the public site."
+msgstr "محتوا را روی بخش عمومی سایت قابل مشاهده می‌کند."
+
+msgid "Making the change…"
+msgstr "در حال انجام تغییر…"
+
+msgid "Message the assistant"
+msgstr "پیام به دستیار"
+
+msgid "Moves the item to the trash, where it can be restored."
+msgstr "این مورد را به زباله‌دان می‌برد و از آنجا قابل بازگردانی است."
+
+msgid "New"
+msgstr "گفتگوی تازه"
+
+msgid "No"
+msgstr "نه"
+
+msgid "No earlier conversations."
+msgstr "گفتگوی قبلی وجود ندارد."
+
+msgid "On the dashboard"
+msgstr "در پیشخوان"
+
+msgid "Only a site administrator can set up the AI service."
+msgstr "فقط مدیر سایت می‌تواند سرویس هوش مصنوعی را تنظیم کند."
+
+msgid "Open in the editor"
+msgstr "باز کردن در ویرایشگر"
+
+msgid "Open in the panel"
+msgstr "باز کردن در پیشخوان"
+
+msgid "Open the assistant"
+msgstr "باز کردن دستیار"
+
+msgid "Paste the key here"
+msgstr "کلید را اینجا بگذار"
+
+msgid "Preview"
+msgstr "پیش‌نمایش"
+
+msgid "Reading from your site…"
+msgstr "در حال خواندن از سایتت…"
+
+msgid "Reads information only."
+msgstr "فقط اطلاعات را می‌خواند."
+
+msgid "Recommended default"
+msgstr "پیش‌فرض پیشنهادی"
+
+msgid "Removing…"
+msgstr "در حال حذف…"
+
+msgid "Remove the saved key for this service"
+msgstr "کلید ذخیره‌شده این سرویس را حذف کن"
+
+#. translators: %s: content type label.
+msgid "List drafts in %s and help me decide what to finish or publish next."
+msgstr "پیش‌نویس‌های %s را فهرست کن و کمک کن بفهمم کدام را تمام یا منتشر کنم."
+
+msgid "Save"
+msgstr "ذخیره"
+
+msgid "Saved, but the assistant still needs a key before it can work."
+msgstr "ذخیره شد، ولی دستیار برای کار کردن هنوز به یک کلید نیاز دارد."
+
+msgid "Saved. The assistant is ready — open it from any admin screen."
+msgstr "ذخیره شد. دستیار آماده است — از هر صفحه پیشخوان می‌توانی بازش کنی."
+
+msgid "Send"
+msgstr "بفرست"
+
+msgid "Set up the AI service"
+msgstr "تنظیم سرویس هوش مصنوعی"
+
+#. translators: 1: number of rows shown, 2: total number of items.
+msgid "Showing %1$s of %2$s."
+msgstr "%1$s مورد از %2$s مورد نمایش داده شده."
+
+#. translators: 1: number of items, 2: content type label, e.g. Posts.
+msgid "Review %1$s pending item in %2$s"
+msgid_plural "Review %1$s pending items in %2$s"
+msgstr[0] "بازبینی %1$s مورد در انتظار تأیید در %2$s"
+msgstr[1] "بازبینی %1$s مورد در انتظار تأیید در %2$s"
+
+msgid "Review inactive plugins and suggest which ones are safe to remove."
+msgstr "افزونه‌های غیرفعال را بررسی کن و بگو کدام‌ها را می‌شود با خیال راحت حذف کرد."
+
+#. translators: %s: number of users.
+msgid "Review who has access (%s person)"
+msgid_plural "Review who has access (%s people)"
+msgstr[0] "بازبینی دسترسی‌ها (%s نفر)"
+msgstr[1] "بازبینی دسترسی‌ها (%s نفر)"
+
+#. translators: %s: content type label.
+msgid "Show pending items in %s and summarize what needs approval."
+msgstr "موارد در انتظار تأیید در %s را نشان بده و خلاصه کن چه چیزی باید تأیید شود."
+
+#. translators: %s: content type label.
+msgid "Show scheduled items in %s and confirm timing looks right."
+msgstr "موارد زمان‌بندی‌شده در %s را نشان بده و زمان‌بندی‌شان را بررسی کن."
+
+msgid "Show who has access to this site and what they can do."
+msgstr "نشان بده چه کسانی به این سایت دسترسی دارند و چه کارهایی می‌توانند بکنند."
+
+msgid "Something went wrong."
+msgstr "کاری از پیش نرفت."
+
+msgid "Stop"
+msgstr "توقف"
+
+msgid "Technical details"
+msgstr "جزئیات فنی"
+
+msgid "Tell me what you need"
+msgstr "بگو چه می‌خواهی"
+
+msgid "That is not something on your site I can work with."
+msgstr "این چیزی نیست که روی سایتت بتوانم با آن کار کنم."
+
+msgid "The AI service is busy. Try again in a moment."
+msgstr "سرویس هوش مصنوعی شلوغ است. چند لحظه دیگر دوباره تلاش کن."
+
+msgid "The AI service is not responding right now. Try again in a moment."
+msgstr "سرویس هوش مصنوعی الان پاسخ نمی‌دهد. چند لحظه دیگر دوباره تلاش کن."
+
+msgid "The AI service refused the connection. Check the service settings once and I will carry on."
+msgstr "سرویس هوش مصنوعی اتصال را نپذیرفت. یک بار تنظیمات سرویس را بررسی کن تا ادامه بدهم."
+
+msgid "The assistant could not be reached."
+msgstr "دستیار در دسترس نبود."
+
+msgid "The assistant needs an AI service before it can work."
+msgstr "دستیار برای کار کردن به یک سرویس هوش مصنوعی نیاز دارد."
+
+msgid "The assistant needs an AI service to work. Set it up once and you will not need to come back."
+msgstr "دستیار برای کار کردن به یک سرویس هوش مصنوعی نیاز دارد. یک بار تنظیمش کن؛ دیگر لازم نیست به این صفحه برگردی."
+
+msgid "The assistant stopped unexpectedly."
+msgstr "کار دستیار ناگهانی متوقف شد."
+
+msgid "The key is stored on this site and is never sent to the browser or to us."
+msgstr "کلید روی همین سایت ذخیره می‌شود و هرگز به مرورگر یا به ما فرستاده نمی‌شود."
+
+msgid "There is nothing to answer yet."
+msgstr "هنوز چیزی برای پاسخ دادن نیست."
+
+msgid "This can be undone."
+msgstr "این کار قابل بازگشت است."
+
+msgid "This cannot be undone."
+msgstr "این کار قابل بازگشت نیست."
+
+msgid "This is part of a bulk change across several items."
+msgstr "این بخشی از یک تغییر انبوه روی چند مورد است."
+
+msgid "This page has been open for a while. Reload it and try again."
+msgstr "این صفحه مدتی است باز مانده. تازه‌اش کن و دوباره تلاش کن."
+
+msgid "Try again"
+msgstr "دوباره تلاش کن"
+
+msgid "Untitled"
+msgstr "بدون عنوان"
+
+msgid "View on the site"
+msgstr "دیدن روی سایت"
+
+msgid "Update a site setting"
+msgstr "به‌روزرسانی یکی از تنظیمات سایت"
+
+msgid "What would you like to do on your site today?"
+msgstr "امروز می‌خواهی چه کاری روی سایتت انجام دهیم؟"
+
+msgid "Which plugins have updates available, and which should we apply first?"
+msgstr "کدام افزونه‌ها به‌روزرسانی دارند و کدام را اول اعمال کنیم؟"
+
+msgid "Which site settings can you help me change right now?"
+msgstr "الان کدام تنظیمات سایت را می‌توانی کمک کنی تغییر دهم؟"
+
+msgid "Working on it…"
+msgstr "در حال انجام…"
+
+msgid "Write a new post"
+msgstr "نوشتن یک مطلب تازه"
+
+#. translators: %s: site name.
+msgid "Write a new post for %s"
+msgstr "نوشتن یک مطلب تازه برای %s"
+
+msgid "Yes, do it"
+msgstr "بله، انجامش بده"
+
+msgid "You are not allowed to change these settings."
+msgstr "اجازه تغییر این تنظیمات را نداری."
+
+msgid "You are signed out. Sign in again and I will continue."
+msgstr "از حساب خارج شده‌ای. دوباره وارد شو تا ادامه بدهم."
+
+msgid "You need to be signed in to use the assistant."
+msgstr "برای استفاده از دستیار باید وارد شده باشی."
+
+msgid "item"
+msgstr "مورد"
+
+msgid "API key"
+msgstr "کلید API"
+
+msgid "Service"
+msgstr "سرویس"
+
+msgid "Model"
+msgstr "مدل"
+
+msgid "What leaves your site"
+msgstr "چه چیزی از سایت تو خارج می‌شود"
+
+msgid "When you write to the assistant, your message, the recent conversation, and the site information needed to answer it are sent to the AI service you selected above. Nothing is sent to us. Conversations are stored on this site, for your account only, and you can delete them at any time from the assistant."
+msgstr "وقتی به دستیار پیام می‌دهی، پیام تو، گفتگوی اخیر و اطلاعاتی از سایت که برای پاسخ لازم است به سرویس هوش مصنوعی انتخاب‌شده در بالا فرستاده می‌شود. هیچ چیزی برای ما فرستاده نمی‌شود. گفتگوها روی همین سایت و فقط برای حساب خودت ذخیره می‌شوند و هر وقت بخواهی می‌توانی از داخل دستیار حذفشان کنی."
+
+msgid "The assistant needs an AI service to work. Set it up once; you will not need to come back to this page."
+msgstr "دستیار برای کار کردن به یک سرویس هوش مصنوعی نیاز دارد. یک بار تنظیمش کن؛ دیگر لازم نیست به این صفحه برگردی."

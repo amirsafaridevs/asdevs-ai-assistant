@@ -1,32 +1,56 @@
 <?php
+/**
+ * Admin screens.
+ *
+ * @package ASDevs\AIAssistant
+ */
 
-declare(strict_types=1);
+declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Contracts\ServiceProvider;
+use ASDevs\AIAssistant\Admin\SettingsPage;
+use ASDevs\AIAssistant\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Core\Container;
+use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Discovery\CapabilityMap;
 
-class AdminServiceProvider extends ServiceProvider
-{
-    public function register(): void
-    {
-        add_action('admin_footer', [$this, 'renderWidgetContainer']);
-        add_action('admin_head', [$this, 'addMetaViewport']);
-    }
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-    /**
-     * Render the Vue app mount point in admin footer.
-     */
-    public function renderWidgetContainer(): void
-    {
-        echo '<div id="asdevs-ai-assistant-app"></div>';
-    }
+/**
+ * Registers the top-level AI Assistant admin screen.
+ */
+final class AdminServiceProvider extends ServiceProvider {
 
-    /**
-     * Add meta viewport for proper scaling.
-     */
-    public function addMetaViewport(): void
-    {
-        echo '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
-    }
+	/**
+	 * Bind services.
+	 */
+	public function register(): void {
+		$this->container->singleton(
+			SettingsPage::class,
+			static fn( Container $container ) => new SettingsPage(
+				$container->get( Settings::class ),
+				$container->get( ProviderRegistry::class ),
+				$container->get( CapabilityMap::class )
+			)
+		);
+	}
+
+	/**
+	 * Wire to WordPress.
+	 */
+	public function boot(): void {
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		$page = $this->container->get( SettingsPage::class );
+
+		add_action( 'admin_menu', array( $page, 'register_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( $page, 'enqueue_assets' ) );
+		add_action( 'admin_post_asdevs_ai_assistant_save_settings', array( $page, 'handle_save' ) );
+	}
 }

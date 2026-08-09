@@ -1,239 +1,302 @@
 # ASDevs AI Assistant
 
-> 🧭 **Read-only GPS for your WordPress site** — A floating AI assistant that guides you through settings, menus, and configuration in the WordPress admin.
+**Free WordPress AI assistant and admin agent.** Manage your site in plain language. Discovers REST APIs live. Always free.
 
-[![WordPress Plugin Version](https://img.shields.io/badge/wordpress-v1.0.0-blue.svg)](https://wordpress.org/)
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-purple.svg)](https://www.php.net/)
-[![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+[![License: GPL v2 or later](https://img.shields.io/badge/License-GPLv2%20or%20later-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+[![Requires WordPress](https://img.shields.io/badge/WordPress-7.0%2B-blue.svg)](https://wordpress.org/)
+[![Requires PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4.svg)](https://www.php.net/)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/amirsafaridevs/asdevs-ai-assistant)
 
----
+ASDevs AI Assistant is a colleague inside your WordPress admin. It learns what *this* site can actually do — by reading the live REST API map from core, plugins, and themes — and turns plain-language requests into real actions. It is not a content chatbot pasted into WordPress. It is an **administrative AI agent**.
 
-## 📖 Overview
-
-**ASDevs AI Assistant** is a smart, floating AI companion for your WordPress admin dashboard. It acts like a GPS for your WordPress site — helping you navigate menus, find settings, and configure your site without needing to remember where everything is.
-
-> ⚠️ **Read-Only by Design:** The assistant cannot create, modify, or delete any content on your site. It only provides guidance and navigation.
+**Always free.** No paid tier. No “pro” gate on core agent behaviour. You bring your own AI connection through WordPress Connectors; the plugin stays free forever under the GPL.
 
 ---
 
-## ✨ Key Features
+## Why this is different
 
-| Feature | Description |
-|---------|-------------|
-| 🫧 **Floating Chat Widget** | A sleek, always-accessible AI assistant button in the bottom-right corner of every admin page |
-| 🧠 **AI-Powered Navigation** | Ask where a setting is, and the assistant will guide you there step-by-step |
-| 🌐 **Context-Aware** | Understands your current page, installed plugins, active theme, and admin menus |
-| 🔒 **Secure by Design** | Your API key never leaves the server — all AI requests are proxied through the WordPress backend |
-| 🤖 **Multiple AI Providers** | Supports OpenAI, Claude, DeepSeek, Gemini, and custom OpenAI-compatible endpoints |
-| ⚡ **Streaming Responses** | Real-time, token-by-token AI responses via Server-Sent Events (SSE) |
-| 🎯 **Element Highlighting** | Visually highlights the exact field or section the user needs to find |
-| 🔄 **Redirect Continuation** | Continues the conversation even after navigating to a different admin page |
+Most “AI for WordPress” plugins help you write text. This one helps you **run the site**.
 
----
+| Pillar | What it means |
+| --- | --- |
+| **Discovery** | Capability map comes from your site’s live REST routes — not a hardcoded feature list |
+| **Action** | “Go to Settings → General” is a failure mode; when an API can do it, the agent does it |
+| **Trust** | Your permissions are the ceiling; risk policy and never-rules run on the server |
+| **Extensibility** | Any plugin/theme with standard REST routes widens the agent; admins can define Skills |
 
-## 🎬 How It Works
-
-1. **Install & Activate** the plugin
-2. Go to **AI Assistant → Settings** and configure your AI provider and API key
-3. Click the sparkle ✨ button in the bottom-right corner of any admin page
-4. Ask questions like:
-   - *"Where can I change the site title?"*
-   - *"How do I install a new plugin?"*
-   - *"Where is the WooCommerce checkout settings page?"*
-5. The assistant will guide you with step-by-step instructions and can even navigate you directly to the right page
+Install a shop plugin today and ask about orders today. Ship an in-house CRM that registers REST routes, and the agent can use them without a special integration from us.
 
 ---
 
-## 📦 Installation
+## Features
 
-### From WordPress Admin
+### Live capability discovery
 
-1. Go to **Plugins → Add New**
-2. Search for "ASDevs AI Assistant"
-3. Click **Install Now** and then **Activate**
-4. Go to **AI Assistant → Settings** to configure your AI provider
+The agent builds its understanding from WordPress’s REST registry (`register_rest_route` surfaces from core, plugins, and themes). Tools:
 
-### Manual Installation
+- `list_capabilities` — what this site exposes right now
+- `describe_capability` — full parameter schema for one route
+- `call_api` — GET/POST/PUT/PATCH/DELETE against allowed routes
+
+### Agent mode and Ask mode
+
+- **Agent mode** — discover, read, and change the site (writes still pass risk policy)
+- **Ask mode** — read-only answers grounded in live site data
+
+### Skills
+
+Administrators define reusable skills (name, slug, description, prompt) for house workflows — weekly reviews, publishing checklists, agency maintenance routines, reply-style guides, and more. Invoke them when you want the agent to follow a stored routine.
+
+### Memory and conversations
+
+- Per-administrator conversation history on your own WordPress site
+- Optional persistent memory notes for site facts worth remembering
+- Delete one conversation or everything; uninstall removes plugin-owned data
+
+### Safety
+
+Three risk levels, enforced in PHP — not only in the model prompt:
+
+1. **Read** — runs immediately  
+2. **Reversible change** — runs and is reported clearly  
+3. **Risky / irreversible / bulk / public-facing / permission changes** — asks first  
+
+Hard refusals include deleting your own account, raising your own role, changing the site URL, installing plugins/themes as code, wiping whole collections in one call, bulk messaging members, and editing site files.
+
+### Languages
+
+You can talk to the agent in **any language**. It replies in the language you write — that comes from the AI model, not from a two-language limit in this plugin.
+
+The plugin UI is **English**. Translation files ship under `languages/` for other locales (including Persian). Contributions through standard WordPress i18n (`.pot` / `.po`) are welcome.
+
+---
+
+## What you can ask
+
+Ask in any language. Short commands work as well as full sentences.
+
+**Content** — create drafts, edit, categorize, schedule, review drafts from the screen you are on (“publish this”, “schedule this for tomorrow at nine”).
+
+**Users** — list users, create accounts, change roles (with confirmation when access rises). Never delete or elevate *your own* account through the agent.
+
+**Plugins and health** — inspect active/inactive/outdated plugins; activate or deactivate when APIs allow.
+
+**Anything on your REST map** — forms, memberships, LMS, ecommerce, events, CRMs, custom post types — if they register discoverable REST routes the signed-in admin may call, they become agent capabilities.
+
+---
+
+## Requirements
+
+| Requirement | Version / note |
+| --- | --- |
+| WordPress | 7.0+ (core AI connectors + AI Client) |
+| PHP | 8.1+ |
+| Capability | `manage_options` (administrators) |
+| AI | At least one connector under **Settings → Connectors** |
+
+---
+
+## Installation
+
+1. Install and activate the plugin.
+2. Go to **Settings → Connectors** and connect a provider (OpenAI, Anthropic, Google, or another WordPress connector).
+3. Optionally open **AI Assistant** in the admin menu to pick the preferred connector.
+4. Open the floating assistant on any admin screen and accept the terms gate when first prompted.
+5. Start with a real task: “show my latest drafts”, “list inactive plugins”, or “create a draft about …”.
+
+No setup wizard. No welcome tour. Activate and work.
+
+### From this repository
 
 ```bash
-cd wp-content/plugins/
-git clone https://github.com/amirsafaridevs/asdevs-ai-assistant.git
-cd asdevs-ai-assistant
-composer install --no-dev
-```
+# Production-style install assumes Composer deps and built assets are present.
+composer install --no-dev --optimize-autoloader
 
-Then activate the plugin from **Plugins → Installed Plugins**.
-
----
-
-## ⚙️ Configuration
-
-Navigate to **AI Assistant → Settings** in your WordPress admin and configure:
-
-| Setting | Description |
-|---------|-------------|
-| **AI Provider** | Choose from OpenAI, Claude, DeepSeek, Gemini, or Custom |
-| **API Key** | Your provider's API key (stored securely, never exposed to frontend) |
-| **Model** | Select the AI model (e.g., GPT-4o, Claude 3.5 Sonnet, etc.) |
-| **Custom Endpoint** | For OpenAI-compatible custom providers |
-
----
-
-## 🤖 Supported AI Providers
-
-| Provider | Models |
-|----------|--------|
-| **OpenAI** | GPT-4, GPT-4o, GPT-4o-mini, GPT-3.5 Turbo |
-| **Anthropic (Claude)** | Claude 3.5 Sonnet, Claude 3 Opus, Claude 3 Haiku |
-| **DeepSeek** | DeepSeek V3, DeepSeek R1 |
-| **Google Gemini** | Gemini 1.5 Pro, Gemini 1.5 Flash |
-| **Custom** | Any OpenAI-compatible endpoint |
-
----
-
-## 🏗️ Architecture
-
-```
-asdevs-ai-assistant/
-├── assets/
-│   ├── css/          # Widget styles
-│   └── dist/         # Built Vue frontend (production)
-├── frontend/          # Vue 3 + TypeScript frontend
-│   └── src/
-│       ├── components/   # UI components
-│       ├── stores/       # Pinia state management
-│       ├── services/     # API & utility services
-│       └── agent/        # AI agent & tool definitions
-├── src/               # PHP Backend
-│   ├── Admin/         # Admin pages & hooks
-│   ├── Controllers/   # REST API controllers
-│   ├── Providers/     # Service providers
-│   ├── Services/      # Business logic services
-│   ├── Contracts/     # Interfaces & contracts
-│   ├── App.php        # Plugin bootstrap
-│   └── Container.php  # DI container
-├── plans/             # Architecture & design docs
-├── asdevs-ai-assistant.php  # Plugin entry point
-└── composer.json
-```
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Backend** | PHP 8.2+, WordPress Plugin API, PSR-4, Custom DI Container |
-| **Frontend** | Vue 3, TypeScript, Pinia, Vite |
-| **AI** | Tool-calling Agent, OpenAI-compatible API, SSE Streaming |
-| **Persistence** | Browser `localStorage` only (no server-side chat storage) |
-
----
-
-## 🔐 Security
-
-- ✅ API keys are stored in the WordPress database and **never exposed** to the frontend
-- ✅ All AI requests are **proxied through the backend**
-- ✅ The assistant requires only `read` capability
-- ✅ **Zero frontend exposure** of secrets or credentials
-- ✅ **Read-only** — no write, delete, or modify operations
-
----
-
-## ❓ FAQ
-
-<details>
-<summary><strong>Is my API key secure?</strong></summary>
-Yes. Your API key is stored in the WordPress database and is never exposed to the frontend. All AI requests are proxied through the WordPress backend.
-</details>
-
-<details>
-<summary><strong>Does this plugin modify my site content?</strong></summary>
-No. The assistant is completely read-only. It cannot create, modify, or delete any content on your site.
-</details>
-
-<details>
-<summary><strong>What permissions does the assistant need?</strong></summary>
-The assistant requires only <code>read</code> capability, which any logged-in WordPress user has by default.
-</details>
-
-<details>
-<summary><strong>Where is chat history stored?</strong></summary>
-All chat state lives in your browser's <code>localStorage</code>. No conversation data is stored on the server. Clicking "New Chat" clears everything and starts fresh.
-</details>
-
-<details>
-<summary><strong>Can I use my own AI endpoint?</strong></summary>
-Yes! Choose the "Custom" provider and enter any OpenAI-compatible endpoint URL.
-</details>
-
----
-
-## 🧑‍💻 Development
-
-### Prerequisites
-
-- PHP 8.2+
-- Composer
-- Node.js 18+
-- npm
-
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/amirsafaridevs/asdevs-ai-assistant.git
-cd asdevs-ai-assistant
-
-# Install PHP dependencies
-composer install
-
-# Install frontend dependencies
 cd frontend
-npm install
-
-# Start Vite dev server
-npm run dev
-
-# Build for production
+npm ci
 npm run build
 ```
 
-### Branch Strategy
-
-- `main` — Stable, production-ready code
-- `develop` — Active development branch
+Built front-end assets are written to `assets/dist/`.
 
 ---
 
-## 📝 Changelog
+## For plugin and theme developers
 
-### 1.0.0
-- 🎉 Initial release
-- Floating AI assistant widget for WordPress admin
-- AI-powered page navigation
-- Support for OpenAI, Claude, DeepSeek, and Gemini
-- Streaming AI responses via SSE
-- Custom endpoint support
-- Context-aware responses (current page, plugins, theme, menus)
-- Element highlighting
-- Redirect continuation system
+You do not need a proprietary SDK.
+
+1. Register WordPress REST routes with clear schemas, args, and permission callbacks — the agent discovers them like any other client.
+2. Prefer descriptive schemas; the agent can load full parameter detail before calling.
+3. Keep dangerous operations behind proper capabilities.
+4. Want a purpose-built surface for agents? Expose dedicated REST endpoints for common admin tasks; discovery picks them up automatically.
+
+### Filters
+
+```php
+/**
+ * Shape the assistant instructions for this site / request.
+ *
+ * @param string               $prompt
+ * @param array<string, mixed> $snapshot
+ * @param array<string, mixed> $page
+ * @param string               $mode        agent|ask
+ * @param array<int, string>   $skill_slugs
+ */
+apply_filters( 'asdevs_ai_assistant_system_prompt', $prompt, $snapshot, $page, $mode, $skill_slugs );
+
+/**
+ * Register extra AI provider adapters.
+ */
+apply_filters( 'asdevs_ai_assistant_providers', $extra, $settings, $registry );
+
+/**
+ * Register additional service providers into the plugin container.
+ */
+apply_filters( 'asdevs_ai_assistant_service_providers', $providers );
+
+/**
+ * Control whether front-end assistant assets load on a given admin screen.
+ */
+apply_filters( 'asdevs_ai_assistant_should_load', true );
+```
 
 ---
 
-## 📄 License
+## How the agent works
 
-This project is licensed under the **GPL-2.0-or-later** License. See the [LICENSE](https://www.gnu.org/licenses/gpl-2.0.html) for details.
+1. **Intent** — what you want done  
+2. **Capability match** — live REST discovery  
+3. **Risk and permission check** — server-side policy before writes  
+4. **Execution** — generic `call_api` against the registered route  
+5. **Verification** — report what actually happened, with admin links when useful  
 
----
-
-## 👤 Author
-
-**Amir Safari**
-
-- GitHub: [@amirsafaridevs](https://github.com/amirsafaridevs)
-- Website: [amirsafaridev.github.io](https://amirsafaridev.github.io/)
+Architecture detail lives under `src/` (discovery, execution, risk policy, conversations, skills, REST controllers) and `frontend/` (Vue/TypeScript admin UI).
 
 ---
 
-<p align="center">
-  Made with ❤️ for the WordPress community
-</p>
+## Privacy and external services
+
+- Conversations, skills, and memory stay on **your** WordPress site  
+- API keys live in **WordPress Connectors**, not in this plugin’s own key forms  
+- Nothing is sent to ASDevs servers  
+- No analytics, telemetry, or tracking baked into the product  
+- When you chat, your message, recent conversation context, and the site facts needed to answer are sent through WordPress to the **provider you connected**  
+
+Review the provider’s own terms when you enable a connector (OpenAI, Anthropic, Google, etc.). Full disclosure for the WordPress.org directory lives in [`readme.txt`](readme.txt) under **External services**.
+
+---
+
+## What this plugin is not
+
+- Not a public-facing chatbot or visitor support widget  
+- Not a bulk SEO content factory  
+- Not tied to a single AI vendor  
+- Not an unsupervised autopilot — high-impact actions still ask you first  
+
+---
+
+## FAQ
+
+<details>
+<summary><strong>Is it really free forever?</strong></summary>
+
+Yes. GPLv2 or later. No premium unlock for the agent, discovery, skills, or risk policy. You may still pay your AI provider for tokens.
+</details>
+
+<details>
+<summary><strong>Chatbot or admin agent?</strong></summary>
+
+Admin agent. It can answer questions, but the design goal is discovering site capabilities and performing allowed actions through REST APIs.
+</details>
+
+<details>
+<summary><strong>Will it work with WooCommerce / LMS / my custom plugin?</strong></summary>
+
+If they expose usable REST APIs and your administrator can call them, yes — without a special integration from us.
+</details>
+
+<details>
+<summary><strong>Can other plugins add APIs for the agent?</strong></summary>
+
+Yes. Ordinary `register_rest_route` design is the integration. Optional behavioural filters are listed above.
+</details>
+
+<details>
+<summary><strong>Can it do something I cannot do myself?</strong></summary>
+
+No. Only administrators open it, and every action runs as that user through WordPress permissions.
+</details>
+
+<details>
+<summary><strong>Will it change things without asking?</strong></summary>
+
+Reads run immediately. Reversible changes may run and are reported. Risky, irreversible, bulk, public-facing, or permission changes ask first.
+</details>
+
+<details>
+<summary><strong>Does it add a chatbot to the public site?</strong></summary>
+
+No. Admin-only.
+</details>
+
+<details>
+<summary><strong>Where are conversations stored?</strong></summary>
+
+On your WordPress site, per user. Delete anytime. Uninstall removes plugin-owned data.
+</details>
+
+<details>
+<summary><strong>Which languages can I use?</strong></summary>
+
+Any language for chat — the model answers in the language you write. The plugin UI is English; locale files under `languages/` cover other languages where available (including Persian).
+</details>
+
+<details>
+<summary><strong>Can it install plugins or edit core files?</strong></summary>
+
+No. Those are hard refusals. It can point you to the right admin screen instead.
+</details>
+
+More questions are answered in [`readme.txt`](readme.txt) for the WordPress.org listing.
+
+---
+
+## Development
+
+```text
+asdevs-ai-assistant/
+├── asdevs-ai-assistant.php   # Bootstrap only
+├── src/                      # PHP: discovery, AI, security, REST, skills, …
+├── frontend/                 # Vue + TypeScript UI
+├── assets/dist/              # Built front-end
+├── tests/                    # PHPUnit (risk policy, never-rules, …)
+├── readme.txt                # WordPress.org readme
+└── README.md                 # This file
+```
+
+```bash
+# PHP deps (dev)
+composer install
+
+# Front-end
+cd frontend && npm ci && npm run build
+
+# Tests (when configured in your environment)
+vendor/bin/phpunit
+```
+
+WordPress.org packaging notes and product behaviour principles are documented for contributors in `plans/` when present in the development tree (not required at runtime).
+
+---
+
+## License
+
+GPL-2.0-or-later. See [LICENSE](LICENSE) if shipped, or <https://www.gnu.org/licenses/gpl-2.0.html>.
+
+## Author
+
+[amirsafaridevs](https://profiles.wordpress.org/amirsafaridevs/) · [GitHub](https://github.com/amirsafaridevs/asdevs-ai-assistant)
+
+---
+
+If you want a **free WordPress AI assistant** that can help **manage WordPress** as a real **admin AI agent** against your site’s APIs — this is that product.

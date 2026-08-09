@@ -1,707 +1,400 @@
 <?php
+/**
+ * The AI connector preference screen.
+ *
+ * @package ASDevs\AIAssistant
+ */
 
-declare(strict_types=1);
+declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Admin;
 
-use ASDevs\AIAssistant\Services\SettingsService;
+use ASDevs\AIAssistant\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Discovery\CapabilityMap;
 
-class SettingsPage
-{
-    private const PAGE_SLUG = 'asdevs-ai-assistant-settings';
-    private const MENU_SLUG = 'asdevs-ai-assistant';
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-    public function __construct(
-        private SettingsService $settingsService,
-    ) {}
+/**
+ * Top-level admin screen: pick which WordPress AI connector the assistant uses.
+ *
+ * Keys are managed under Settings → Connectors, not here.
+ */
+final class SettingsPage {
 
-    /**
-     * Register the admin menu and page.
-     */
-    public function register(): void
-    {
-        add_action('admin_menu', [$this, 'addMenu']);
-        add_action('admin_post_asdevs_ai_save_settings', [$this, 'handleSave']);
-    }
+	/**
+	 * Nonce action.
+	 */
+	private const ACTION = 'asdevs_ai_assistant_save_settings';
 
-    /**
-     * Add menu item to WordPress admin.
-     */
-    public function addMenu(): void
-    {
-        add_menu_page(
-            'ASDevs AI Assistant',
-            'AI Assistant',
-            'manage_options',
-            self::MENU_SLUG,
-            [$this, 'render'],
-            'data:image/svg+xml;base64,' . base64_encode(
-                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#a7aaad">'
-                . '<path d="M12 2L9.5 9.5L2 12L9.5 14.5L12 22L14.5 14.5L22 12L14.5 9.5L12 2Z"/>'
-                . '</svg>'
-            ),
-            81
-        );
+	/**
+	 * Style handle.
+	 */
+	private const STYLE_HANDLE = 'asdevs-ai-assistant-admin';
 
-        add_submenu_page(
-            self::MENU_SLUG,
-            'Settings',
-            'Settings',
-            'manage_options',
-            self::PAGE_SLUG,
-            [$this, 'render']
-        );
-    }
+	/**
+	 * Settings.
+	 *
+	 * @var Settings
+	 */
+	private Settings $settings;
 
-    /**
-     * Handle form submission.
-     */
-    public function handleSave(): void
-    {
-        if (!current_user_can('manage_options')) {
-            wp_die('Unauthorized');
-        }
+	/**
+	 * Providers.
+	 *
+	 * @var ProviderRegistry
+	 */
+	private ProviderRegistry $providers;
 
-        check_admin_referer('asdevs_ai_settings');
+	/**
+	 * Site capability map the assistant discovers.
+	 *
+	 * @var CapabilityMap
+	 */
+	private CapabilityMap $capabilities;
 
-        $input = [
-            'provider'            => isset($_POST['asdevs_provider']) ? sanitize_text_field(wp_unslash($_POST['asdevs_provider'])) : '',
-            'model'               => isset($_POST['asdevs_model']) ? sanitize_text_field(wp_unslash($_POST['asdevs_model'])) : '',
-            'api_key'             => isset($_POST['asdevs_api_key']) ? sanitize_text_field(wp_unslash($_POST['asdevs_api_key'])) : '',
-            'use_custom_endpoint' => isset($_POST['asdevs_use_custom_endpoint']),
-            'custom_endpoint'     => isset($_POST['asdevs_custom_endpoint']) ? esc_url_raw(wp_unslash($_POST['asdevs_custom_endpoint'])) : '',
-        ];
+	/**
+	 * Constructor.
+	 *
+	 * @param Settings         $settings     Settings.
+	 * @param ProviderRegistry $providers    Providers.
+	 * @param CapabilityMap    $capabilities Capability map.
+	 */
+	public function __construct( Settings $settings, ProviderRegistry $providers, CapabilityMap $capabilities ) {
+		$this->settings     = $settings;
+		$this->providers    = $providers;
+		$this->capabilities = $capabilities;
+	}
 
-        $this->settingsService->save($input);
+	/**
+	 * Register a top-level admin menu item.
+	 */
+	public function register_menu(): void {
+		add_menu_page(
+			__( 'AI Assistant', 'asdevs-ai-assistant' ),
+			__( 'AI Assistant', 'asdevs-ai-assistant' ),
+			'manage_options',
+			ASDEVS_AI_ASSISTANT_SLUG,
+			array( $this, 'render' ),
+			$this->menu_icon(),
+			79
+		);
+	}
 
-        wp_redirect(add_query_arg(
-            ['page' => self::PAGE_SLUG, 'saved' => '1'],
-            admin_url('admin.php')
-        ));
-        exit;
-    }
+	/**
+	 * Load screen styles only on this page.
+	 *
+	 * @param string $hook_suffix Current admin page hook.
+	 */
+	public function enqueue_assets( string $hook_suffix ): void {
+		if ( 'toplevel_page_' . ASDEVS_AI_ASSISTANT_SLUG !== $hook_suffix ) {
+			return;
+		}
 
-    /**
-     * Render the settings page.
-     */
-    public function render(): void
-    {
-        $settings = $this->settingsService->get();
-        $providers = SettingsService::PROVIDERS;
-        $currentProvider = $settings['provider'];
-        $currentModels = $providers[$currentProvider]['models'] ?? [];
-        $useCustomEndpoint = !empty($settings['use_custom_endpoint']);
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading a status flag set by our own redirect, not form processing
-        $saved = isset($_GET['saved']) && $_GET['saved'] === '1';
-        ?>
-        <div class="wrap asdevs-settings-wrap">
-            <div class="asdevs-settings-header">
-                <div class="asdevs-settings-brand">
-                    <div class="asdevs-settings-icon">
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2L9.5 9.5L2 12L9.5 14.5L12 22L14.5 14.5L22 12L14.5 9.5L12 2Z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="asdevs-settings-title">ASDevs AI Assistant</h1>
-                        <p class="asdevs-settings-subtitle">Configure your AI provider and connection settings</p>
-                    </div>
-                </div>
-            </div>
+		wp_enqueue_style(
+			self::STYLE_HANDLE,
+			ASDEVS_AI_ASSISTANT_URL . 'assets/admin/settings.css',
+			array(),
+			ASDEVS_AI_ASSISTANT_VERSION
+		);
+	}
 
-            <?php if ($saved): ?>
-                <div class="asdevs-notice asdevs-notice-success">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                        <path d="M20 6L9 17l-5-5"/>
-                    </svg>
-                    Settings saved successfully.
-                </div>
-            <?php endif; ?>
+	/**
+	 * Save the submitted settings.
+	 */
+	public function handle_save(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to change these settings.', 'asdevs-ai-assistant' ), '', array( 'response' => 403 ) );
+		}
 
-            <?php if (!$this->settingsService->isConfigured()): ?>
-                <div class="asdevs-notice asdevs-notice-warning">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                        <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-                    </svg>
-                    The assistant is not yet configured. Add your API key below to activate it.
-                </div>
-            <?php endif; ?>
+		check_admin_referer( self::ACTION );
 
-            <div class="asdevs-settings-card">
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-                    <input type="hidden" name="action" value="asdevs_ai_save_settings">
-                    <?php wp_nonce_field('asdevs_ai_settings'); ?>
+		$provider = isset( $_POST['provider'] ) ? sanitize_key( wp_unslash( $_POST['provider'] ) ) : '';
 
-                    <!-- Step 1: Provider -->
-                    <div class="asdevs-field-group">
-                        <label class="asdevs-field-label">
-                            <span class="asdevs-step-badge">1</span>
-                            AI Provider
-                        </label>
-                        <p class="asdevs-field-help">Select which AI service to use for the assistant.</p>
-                        <div class="asdevs-provider-grid" id="asdevs-provider-grid">
-                            <?php foreach ($providers as $slug => $data): ?>
-                                <label class="asdevs-provider-card <?php echo $currentProvider === $slug ? 'active' : ''; ?>">
-                                    <input
-                                        type="radio"
-                                        name="asdevs_provider"
-                                        value="<?php echo esc_attr($slug); ?>"
-                                        <?php checked($currentProvider, $slug); ?>
-                                        class="asdevs-provider-radio"
-                                        data-models='<?php echo esc_attr(json_encode($data['models'])); ?>'
-                                    >
-                                    <span class="asdevs-provider-name"><?php echo esc_html($data['name']); ?></span>
-                                    <?php if (!empty($data['note'])): ?>
-                                        <span class="asdevs-provider-note"><?php echo esc_html($data['note']); ?></span>
-                                    <?php endif; ?>
-                                </label>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
+		if ( '' !== $provider && ! isset( $this->providers->all()[ $provider ] ) ) {
+			$provider = $this->settings->provider();
+		}
 
-                    <!-- Step 2: Model -->
-                    <div class="asdevs-field-group">
-                        <label class="asdevs-field-label" for="asdevs-model">
-                            <span class="asdevs-step-badge">2</span>
-                            Model
-                        </label>
-                        <p class="asdevs-field-help">Choose the AI model. Different models have different capabilities and costs.</p>
-                        <select
-                            name="asdevs_model"
-                            id="asdevs-model"
-                            class="asdevs-select"
-                        >
-                            <?php foreach ($currentModels as $modelSlug => $modelName): ?>
-                                <option value="<?php echo esc_attr($modelSlug); ?>" <?php selected($settings['model'], $modelSlug); ?>>
-                                    <?php echo esc_html($modelName); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+		$this->settings->save( $provider );
 
-                    <!-- Step 3: API Key -->
-                    <div class="asdevs-field-group">
-                        <label class="asdevs-field-label" for="asdevs-api-key">
-                            <span class="asdevs-step-badge">3</span>
-                            API Key
-                        </label>
-                        <p class="asdevs-field-help">Your API key is stored securely and never exposed to the frontend.</p>
-                        <div class="asdevs-api-key-wrap">
-                            <input
-                                type="password"
-                                name="asdevs_api_key"
-                                id="asdevs-api-key"
-                                class="asdevs-input-text"
-                                placeholder="<?php echo $this->settingsService->isConfigured() ? '•••••••• (leave blank to keep current)' : 'sk-...'; ?>"
-                                autocomplete="off"
-                            >
-                            <button type="button" class="asdevs-toggle-visibility" id="asdevs-toggle-key" title="Show/Hide API Key">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'    => ASDEVS_AI_ASSISTANT_SLUG,
+					'updated' => 'true',
+				),
+				admin_url( 'admin.php' )
+			)
+		);
 
-                    <!-- Step 4: Custom Endpoint (Optional) -->
-                    <div class="asdevs-field-group">
-                        <div class="asdevs-toggle-row">
-                            <div>
-                                <label class="asdevs-field-label">
-                                    <span class="asdevs-step-badge">4</span>
-                                    Custom Endpoint
-                                    <span class="asdevs-label-optional">Optional</span>
-                                </label>
-                                <p class="asdevs-field-help">
-                                    Override the default API endpoint. Use this for proxies, custom deployments, or compatible services.
-                                </p>
-                            </div>
-                            <label class="asdevs-toggle">
-                                <input
-                                    type="checkbox"
-                                    name="asdevs_use_custom_endpoint"
-                                    id="asdevs-use-custom-endpoint"
-                                    class="asdevs-toggle-input"
-                                    <?php checked($useCustomEndpoint); ?>
-                                >
-                                <span class="asdevs-toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="asdevs-custom-endpoint-body" id="asdevs-custom-endpoint-body" style="<?php echo $useCustomEndpoint ? '' : 'display:none;'; ?>">
-                            <input
-                                type="url"
-                                name="asdevs_custom_endpoint"
-                                id="asdevs-custom-endpoint"
-                                class="asdevs-input-text"
-                                placeholder="<?php echo esc_attr($providers[$currentProvider]['endpoint'] ?? 'https://api.example.com/v1/chat/completions'); ?>"
-                                value="<?php echo esc_url($settings['custom_endpoint']); ?>"
-                            >
-                            <?php if (empty($settings['custom_endpoint'])): ?>
-                                <p class="asdevs-endpoint-hint">
-                                    Default: <code><?php echo esc_html($providers[$currentProvider]['endpoint'] ?? ''); ?></code>
-                                </p>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+		exit;
+	}
 
-                    <!-- Submit -->
-                    <div class="asdevs-field-group asdevs-submit-row">
-                        <button type="submit" class="asdevs-btn-primary">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                                <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-                                <polyline points="17 21 17 13 7 13 7 21"/>
-                                <polyline points="7 3 7 8 15 8"/>
-                            </svg>
-                            Save Settings
-                        </button>
-                    </div>
-                </form>
-            </div>
+	/**
+	 * Render the screen.
+	 */
+	public function render(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
 
-            <!-- Current Configuration Summary -->
-            <?php if ($this->settingsService->isConfigured()): ?>
-                <div class="asdevs-settings-card asdevs-config-summary">
-                    <h3 class="asdevs-summary-title">Current Configuration</h3>
-                    <div class="asdevs-summary-grid">
-                        <div class="asdevs-summary-item">
-                            <span class="asdevs-summary-label">Provider</span>
-                            <span class="asdevs-summary-value"><?php echo esc_html($providers[$currentProvider]['name'] ?? $currentProvider); ?></span>
-                        </div>
-                        <div class="asdevs-summary-item">
-                            <span class="asdevs-summary-label">Model</span>
-                            <span class="asdevs-summary-value"><?php echo esc_html($currentModels[$settings['model']] ?? $settings['model']); ?></span>
-                        </div>
-                        <div class="asdevs-summary-item">
-                            <span class="asdevs-summary-label">API Key</span>
-                            <span class="asdevs-summary-value asdevs-key-status">Configured ✓</span>
-                        </div>
-                        <div class="asdevs-summary-item">
-                            <span class="asdevs-summary-label">Endpoint</span>
-                            <span class="asdevs-summary-value asdevs-endpoint-value"><?php echo esc_html($this->settingsService->getEndpoint()); ?></span>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
+		$selected = $this->providers->selected();
+		$current  = $this->settings->provider();
 
-        <!-- Inline styles for settings page -->
-        <style>
-            /* Settings Page Styles */
-            .asdevs-settings-wrap {
-                max-width: 720px;
-                margin: 20px 0;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-            }
-            .asdevs-settings-header {
-                margin-bottom: 24px;
-            }
-            .asdevs-settings-brand {
-                display: flex;
-                align-items: center;
-                gap: 14px;
-            }
-            .asdevs-settings-icon {
-                width: 48px;
-                height: 48px;
-                border-radius: 12px;
-                background: linear-gradient(135deg, #007AFF, #5856D6);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-shrink: 0;
-            }
-            .asdevs-settings-title {
-                font-size: 22px;
-                font-weight: 700;
-                color: #111827;
-                margin: 0 0 2px;
-                padding: 0;
-            }
-            .asdevs-settings-subtitle {
-                font-size: 13px;
-                color: #6B7280;
-                margin: 0;
-            }
-            .asdevs-settings-card {
-                background: #fff;
-                border: 1px solid #E5E7EB;
-                border-radius: 16px;
-                padding: 28px 32px;
-                margin-bottom: 20px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-            }
-            .asdevs-field-group {
-                margin-bottom: 24px;
-            }
-            .asdevs-field-group:last-child { margin-bottom: 0; }
-            .asdevs-field-label {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                color: #111827;
-                margin-bottom: 4px;
-            }
-            .asdevs-field-help {
-                font-size: 12px;
-                color: #6B7280;
-                margin: 0 0 10px;
-                line-height: 1.5;
-            }
-            .asdevs-step-badge {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 22px;
-                height: 22px;
-                border-radius: 6px;
-                background: #007AFF;
-                color: white;
-                font-size: 11px;
-                font-weight: 700;
-                flex-shrink: 0;
-            }
-            .asdevs-label-optional {
-                font-size: 11px;
-                font-weight: 400;
-                color: #9CA3AF;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
+		if ( '' === $current && null !== $selected ) {
+			$current = $selected->id();
+		}
 
-            /* Provider grid */
-            .asdevs-provider-grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-                margin-top: 8px;
-            }
-            .asdevs-provider-card {
-                display: flex;
-                flex-direction: column;
-                padding: 14px 16px;
-                border: 2px solid #E5E7EB;
-                border-radius: 12px;
-                cursor: pointer;
-                transition: all 150ms ease;
-                background: #FAFBFC;
-            }
-            .asdevs-provider-card:hover {
-                border-color: #007AFF;
-                background: #F0F7FF;
-            }
-            .asdevs-provider-card.active {
-                border-color: #007AFF;
-                background: #F0F7FF;
-                box-shadow: 0 0 0 3px rgba(0,122,255,0.1);
-            }
-            .asdevs-provider-radio {
-                display: none;
-            }
-            .asdevs-provider-name {
-                font-size: 13px;
-                font-weight: 600;
-                color: #111827;
-            }
-            .asdevs-provider-note {
-                font-size: 11px;
-                color: #FF9F0A;
-                margin-top: 4px;
-                line-height: 1.4;
-            }
+		$ready     = $this->providers->is_ready();
+		$providers = $this->providers->all();
+		$updated   = isset( $_GET['updated'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
+		$map       = $this->capabilities->all();
+		$caps      = is_array( $map['capabilities'] ?? null ) ? $map['capabilities'] : array();
+		?>
+		<div class="wrap asdevs-ai-admin-wrap">
+			<h1><?php esc_html_e( 'AI Assistant', 'asdevs-ai-assistant' ); ?></h1>
 
-            /* Select */
-            .asdevs-select {
-                width: 100%;
-                max-width: 400px;
-                padding: 10px 14px;
-                border: 1px solid #D1D5DB;
-                border-radius: 10px;
-                font-size: 14px;
-                font-family: inherit;
-                background: #fff;
-                color: #111827;
-                outline: none;
-                transition: border-color 150ms;
-                appearance: none;
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-                background-repeat: no-repeat;
-                background-position: right 12px center;
-                padding-right: 36px;
-            }
-            .asdevs-select:focus {
-                border-color: #007AFF;
-                box-shadow: 0 0 0 3px rgba(0,122,255,0.1);
-            }
+			<div class="asdevs-ai-admin">
+				<header class="asdevs-ai-admin__hero">
+					<div class="asdevs-ai-admin__hero-main">
+						<span class="asdevs-ai-admin__mark" aria-hidden="true">
+							<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+								<path fill="currentColor" d="M16 3.2c1.15 3.05 2.1 4.05 5.15 5.2-3.05 1.15-4 2.1-5.15 5.15-1.15-3.05-2.1-4-5.15-5.15 3.05-1.15 4-2.15 5.15-5.2Z"/>
+								<path fill="currentColor" opacity=".88" d="M24.2 14.4c.7 1.85 1.3 2.45 3.15 3.15-1.85.7-2.45 1.3-3.15 3.15-.7-1.85-1.3-2.45-3.15-3.15 1.85-.7 2.45-1.3 3.15-3.15Z"/>
+								<path fill="currentColor" opacity=".74" d="M9.1 18.6c.55 1.45 1 1.9 2.45 2.45-1.45.55-1.9 1-2.45 2.45-.55-1.45-1-1.9-2.45-2.45 1.45-.55 1.9-1 2.45-2.45Z"/>
+								<path fill="currentColor" opacity=".62" d="M11.4 7.2c.3.8.55 1.05 1.35 1.35-.8.3-1.05.55-1.35 1.35-.3-.8-.55-1.05-1.35-1.35.8-.3 1.05-.55 1.35-1.35Z"/>
+							</svg>
+						</span>
+						<div class="asdevs-ai-admin__identity">
+							<h2 class="asdevs-ai-admin__title"><?php esc_html_e( 'AI Assistant', 'asdevs-ai-assistant' ); ?></h2>
+							<p class="asdevs-ai-admin__eyebrow"><?php esc_html_e( 'Settings', 'asdevs-ai-assistant' ); ?></p>
+						</div>
+					</div>
 
-            /* Text input */
-            .asdevs-input-text {
-                width: 100%;
-                max-width: 400px;
-                padding: 10px 14px;
-                border: 1px solid #D1D5DB;
-                border-radius: 10px;
-                font-size: 14px;
-                font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-                background: #fff;
-                color: #111827;
-                outline: none;
-                transition: border-color 150ms;
-            }
-            .asdevs-input-text:focus {
-                border-color: #007AFF;
-                box-shadow: 0 0 0 3px rgba(0,122,255,0.1);
-            }
-            .asdevs-input-text::placeholder {
-                color: #9CA3AF;
-            }
-            .asdevs-api-key-wrap {
-                position: relative;
-                display: inline-block;
-                max-width: 400px;
-                width: 100%;
-            }
-            .asdevs-api-key-wrap .asdevs-input-text {
-                width: 100%;
-                padding-right: 40px;
-            }
-            .asdevs-toggle-visibility {
-                position: absolute;
-                right: 2px;
-                top: 50%;
-                transform: translateY(-50%);
-                background: none;
-                border: none;
-                cursor: pointer;
-                padding: 6px 8px;
-                color: #9CA3AF;
-                border-radius: 6px;
-                transition: color 150ms;
-            }
-            .asdevs-toggle-visibility:hover {
-                color: #6B7280;
-            }
-            .asdevs-endpoint-hint {
-                font-size: 12px;
-                color: #6B7280;
-                margin-top: 6px;
-            }
-            .asdevs-endpoint-hint code {
-                background: #F3F4F6;
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-size: 11px;
-                word-break: break-all;
-            }
+					<span class="asdevs-ai-admin__status <?php echo $ready ? 'asdevs-ai-admin__status--ready' : 'asdevs-ai-admin__status--needs-setup'; ?>">
+						<span class="asdevs-ai-admin__status-dot" aria-hidden="true"></span>
+						<?php
+						echo $ready
+							? esc_html__( 'Ready', 'asdevs-ai-assistant' )
+							: esc_html__( 'Needs setup', 'asdevs-ai-assistant' );
+						?>
+					</span>
+				</header>
 
-            /* Buttons */
-            .asdevs-btn-primary {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                padding: 10px 24px;
-                background: #007AFF;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 14px;
-                font-weight: 600;
-                font-family: inherit;
-                cursor: pointer;
-                transition: all 150ms;
-            }
-            .asdevs-btn-primary:hover {
-                background: #0056CC;
-                transform: translateY(-1px);
-                box-shadow: 0 4px 12px rgba(0,122,255,0.3);
-            }
-            .asdevs-submit-row {
-                padding-top: 8px;
-                border-top: 1px solid #F3F4F6;
-            }
+				<div class="asdevs-ai-admin__stack">
+					<?php if ( $updated ) : ?>
+						<div class="asdevs-ai-admin__alert <?php echo $ready ? 'asdevs-ai-admin__alert--success' : 'asdevs-ai-admin__alert--warning'; ?>" role="status">
+							<svg class="asdevs-ai-admin__alert-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<?php if ( $ready ) : ?>
+									<path d="M20 7 10.5 16.5 5 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+								<?php else : ?>
+									<path d="M12 9v4.5M12 17h.01M10.3 4.8 2.8 18a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.8a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+								<?php endif; ?>
+							</svg>
+							<p>
+								<?php
+								echo $ready
+									? esc_html__( 'Saved. The assistant is ready — open it from any admin screen.', 'asdevs-ai-assistant' )
+									: esc_html__( 'Saved, but the selected connector still needs a key under Settings → Connectors.', 'asdevs-ai-assistant' );
+								?>
+							</p>
+						</div>
+					<?php endif; ?>
 
-            /* Notices */
-            .asdevs-notice {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 12px 16px;
-                border-radius: 12px;
-                margin-bottom: 16px;
-                font-size: 13px;
-                font-weight: 500;
-            }
-            .asdevs-notice-success {
-                background: #ECFDF5;
-                color: #065F46;
-                border: 1px solid #A7F3D0;
-            }
-            .asdevs-notice-warning {
-                background: #FFFBEB;
-                color: #92400E;
-                border: 1px solid #FDE68A;
-            }
+					<section class="asdevs-ai-admin__card">
+						<div class="asdevs-ai-admin__card-head">
+							<div>
+								<h3 class="asdevs-ai-admin__card-title"><?php esc_html_e( 'Preferred connector', 'asdevs-ai-assistant' ); ?></h3>
+								<p class="asdevs-ai-admin__card-desc">
+									<?php esc_html_e( 'Models and API keys are managed by WordPress for the connector you pick.', 'asdevs-ai-assistant' ); ?>
+								</p>
+							</div>
+							<a class="asdevs-ai-admin__btn asdevs-ai-admin__btn--ghost" href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>">
+								<?php esc_html_e( 'Open Connectors', 'asdevs-ai-assistant' ); ?>
+							</a>
+						</div>
 
-            /* Summary */
-            .asdevs-config-summary {
-                background: #F9FAFB;
-                border: 1px solid #E5E7EB;
-            }
-            .asdevs-summary-title {
-                font-size: 15px;
-                font-weight: 600;
-                color: #111827;
-                margin: 0 0 16px;
-                padding: 0;
-            }
-            .asdevs-summary-grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 12px;
-            }
-            .asdevs-summary-item {
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-            }
-            .asdevs-summary-label {
-                font-size: 11px;
-                font-weight: 500;
-                color: #6B7280;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-            .asdevs-summary-value {
-                font-size: 13px;
-                font-weight: 600;
-                color: #111827;
-            }
-            .asdevs-key-status {
-                color: #059669 !important;
-            }
-            .asdevs-endpoint-value {
-                font-size: 11px !important;
-                font-family: 'SF Mono', 'Consolas', monospace;
-                word-break: break-all;
-                color: #6B7280 !important;
-            }
+						<?php if ( array() === $providers ) : ?>
+							<div class="asdevs-ai-admin__empty">
+								<p>
+									<?php esc_html_e( 'No AI provider plugins are active yet. Install Anthropic, OpenAI, or Google from Settings → Connectors, then return here.', 'asdevs-ai-assistant' ); ?>
+								</p>
+								<a class="asdevs-ai-admin__btn asdevs-ai-admin__btn--primary" href="<?php echo esc_url( admin_url( 'options-connectors.php' ) ); ?>">
+									<?php esc_html_e( 'Open Connectors', 'asdevs-ai-assistant' ); ?>
+								</a>
+							</div>
+						<?php else : ?>
+							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+								<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION ); ?>" />
+								<?php wp_nonce_field( self::ACTION ); ?>
 
-            /* Toggle Switch */
-            .asdevs-toggle-row {
-                display: flex;
-                align-items: flex-start;
-                justify-content: space-between;
-                gap: 20px;
-                margin-bottom: 10px;
-            }
-            .asdevs-toggle {
-                position: relative;
-                display: inline-block;
-                width: 48px;
-                height: 28px;
-                flex-shrink: 0;
-                cursor: pointer;
-                margin-top: 2px;
-            }
-            .asdevs-toggle-input {
-                opacity: 0;
-                width: 0;
-                height: 0;
-                position: absolute;
-            }
-            .asdevs-toggle-slider {
-                position: absolute;
-                inset: 0;
-                background: #D1D5DB;
-                border-radius: 28px;
-                transition: all 200ms ease;
-            }
-            .asdevs-toggle-slider::before {
-                content: '';
-                position: absolute;
-                width: 22px;
-                height: 22px;
-                left: 3px;
-                bottom: 3px;
-                background: white;
-                border-radius: 50%;
-                transition: all 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-            }
-            .asdevs-toggle-input:checked + .asdevs-toggle-slider {
-                background: #007AFF;
-            }
-            .asdevs-toggle-input:checked + .asdevs-toggle-slider::before {
-                transform: translateX(20px);
-            }
-            .asdevs-toggle-input:focus-visible + .asdevs-toggle-slider {
-                box-shadow: 0 0 0 3px rgba(0,122,255,0.25);
-            }
-            .asdevs-custom-endpoint-body {
-                animation: asdevs-fade-down 200ms ease;
-            }
-            @keyframes asdevs-fade-down {
-                from { opacity: 0; transform: translateY(-6px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-        </style>
+								<div class="asdevs-ai-admin__providers" role="radiogroup" aria-label="<?php esc_attr_e( 'WordPress connector', 'asdevs-ai-assistant' ); ?>">
+									<?php foreach ( $providers as $provider ) : ?>
+										<?php
+										$configured = $provider->is_configured();
+										$id         = 'asdevs-ai-provider-' . $provider->id();
+										?>
+										<label class="asdevs-ai-admin__provider" for="<?php echo esc_attr( $id ); ?>">
+											<input
+												type="radio"
+												name="provider"
+												id="<?php echo esc_attr( $id ); ?>"
+												value="<?php echo esc_attr( $provider->id() ); ?>"
+												<?php checked( $current, $provider->id() ); ?>
+											/>
+											<span class="asdevs-ai-admin__provider-face">
+												<span class="asdevs-ai-admin__provider-copy">
+													<span class="asdevs-ai-admin__provider-name"><?php echo esc_html( $provider->label() ); ?></span>
+													<span class="asdevs-ai-admin__provider-meta">
+														<?php
+														echo $configured
+															? esc_html__( 'Connected in WordPress', 'asdevs-ai-assistant' )
+															: esc_html__( 'Needs an API key in Connectors', 'asdevs-ai-assistant' );
+														?>
+													</span>
+												</span>
+												<span class="asdevs-ai-admin__chip <?php echo $configured ? 'asdevs-ai-admin__chip--ok' : 'asdevs-ai-admin__chip--off'; ?>">
+													<?php
+													echo $configured
+														? esc_html__( 'Configured', 'asdevs-ai-assistant' )
+														: esc_html__( 'Not configured', 'asdevs-ai-assistant' );
+													?>
+												</span>
+											</span>
+										</label>
+									<?php endforeach; ?>
+								</div>
 
-        <script>
-        (function() {
-            // Provider switch updates model dropdown
-            const radios = document.querySelectorAll('.asdevs-provider-radio');
-            const modelSelect = document.getElementById('asdevs-model');
-            const endpointInput = document.getElementById('asdevs-custom-endpoint');
-            const endpointHint = document.querySelector('.asdevs-endpoint-hint code');
+								<div class="asdevs-ai-admin__actions">
+									<button type="submit" class="asdevs-ai-admin__btn asdevs-ai-admin__btn--primary">
+										<?php esc_html_e( 'Save changes', 'asdevs-ai-assistant' ); ?>
+									</button>
+								</div>
+								<p class="asdevs-ai-admin__hint">
+									<?php esc_html_e( 'After saving, open the assistant from the floating button on any admin screen.', 'asdevs-ai-assistant' ); ?>
+								</p>
+							</form>
+						<?php endif; ?>
+					</section>
 
-            const defaultEndpoints = <?php echo json_encode(array_map(fn($p) => $p['endpoint'], $providers)); ?>;
+					<section class="asdevs-ai-admin__card asdevs-ai-admin__privacy">
+						<h3 class="asdevs-ai-admin__card-title"><?php esc_html_e( 'What leaves your site', 'asdevs-ai-assistant' ); ?></h3>
+						<p class="asdevs-ai-admin__privacy-body">
+							<?php esc_html_e( 'When you write to the assistant, your message, the current conversation, and the site information needed to answer it are sent to the AI provider behind the WordPress connector you selected. Nothing is sent to us. Your active chat is stored on this site, for your account only, and starting a new chat deletes it.', 'asdevs-ai-assistant' ); ?>
+						</p>
+					</section>
 
-            radios.forEach(radio => {
-                radio.addEventListener('change', function() {
-                    // Update active card
-                    document.querySelectorAll('.asdevs-provider-card').forEach(c => c.classList.remove('active'));
-                    this.closest('.asdevs-provider-card').classList.add('active');
+					<?php $this->render_capabilities( $caps ); ?>
+				</div>
+			</div>
+		</div>
+		<?php
+	}
 
-                    // Update models
-                    const models = JSON.parse(this.dataset.models || '{}');
-                    modelSelect.innerHTML = '';
-                    Object.entries(models).forEach(([slug, name]) => {
-                        const opt = document.createElement('option');
-                        opt.value = slug;
-                        opt.textContent = name;
-                        modelSelect.appendChild(opt);
-                    });
+	/**
+	 * Render the same capability list the assistant discovers via /capabilities.
+	 *
+	 * @param array<int, array<string, mixed>> $caps Capability collections.
+	 */
+	private function render_capabilities( array $caps ): void {
+		$grouped = array();
 
-                    // Update endpoint hint
-                    const provider = this.value;
-                    if (endpointHint && defaultEndpoints[provider]) {
-                        endpointHint.textContent = defaultEndpoints[provider];
-                    }
-                });
-            });
+		foreach ( $caps as $cap ) {
+			if ( ! is_array( $cap ) ) {
+				continue;
+			}
 
-            // Toggle API key visibility
-            const toggleBtn = document.getElementById('asdevs-toggle-key');
-            const apiKeyInput = document.getElementById('asdevs-api-key');
-            if (toggleBtn && apiKeyInput) {
-                toggleBtn.addEventListener('click', function() {
-                    const isPassword = apiKeyInput.type === 'password';
-                    apiKeyInput.type = isPassword ? 'text' : 'password';
-                });
-            }
+			$namespace = (string) ( $cap['namespace'] ?? '' );
+			if ( '' === $namespace ) {
+				$namespace = __( 'Other', 'asdevs-ai-assistant' );
+			}
 
-            // Toggle custom endpoint section
-            const customEndpointToggle = document.getElementById('asdevs-use-custom-endpoint');
-            const customEndpointBody = document.getElementById('asdevs-custom-endpoint-body');
-            if (customEndpointToggle && customEndpointBody) {
-                customEndpointToggle.addEventListener('change', function() {
-                    customEndpointBody.style.display = this.checked ? '' : 'none';
-                });
-            }
-        })();
-        </script>
-        <?php
-    }
+			$grouped[ $namespace ][] = $cap;
+		}
+
+		$count = count( $caps );
+		?>
+		<section class="asdevs-ai-admin__card asdevs-ai-admin__caps">
+			<div class="asdevs-ai-admin__card-head">
+				<div>
+					<h3 class="asdevs-ai-admin__card-title"><?php esc_html_e( 'What the assistant can reach', 'asdevs-ai-assistant' ); ?></h3>
+					<p class="asdevs-ai-admin__card-desc">
+						<?php esc_html_e( 'Live REST routes available to your account — the same map the assistant discovers before it acts.', 'asdevs-ai-assistant' ); ?>
+					</p>
+				</div>
+				<span class="asdevs-ai-admin__caps-count" title="<?php esc_attr_e( 'Capabilities', 'asdevs-ai-assistant' ); ?>">
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: %d: number of REST capability collections */
+							_n( '%d capability', '%d capabilities', $count, 'asdevs-ai-assistant' ),
+							$count
+						)
+					);
+					?>
+				</span>
+			</div>
+
+			<?php if ( array() === $grouped ) : ?>
+				<p class="asdevs-ai-admin__caps-empty">
+					<?php esc_html_e( 'No reachable REST capabilities were found for your account.', 'asdevs-ai-assistant' ); ?>
+				</p>
+			<?php else : ?>
+				<div class="asdevs-ai-admin__caps-scroll">
+					<?php foreach ( $grouped as $namespace => $items ) : ?>
+						<div class="asdevs-ai-admin__caps-group">
+							<h4 class="asdevs-ai-admin__caps-ns"><?php echo esc_html( (string) $namespace ); ?></h4>
+							<ul class="asdevs-ai-admin__caps-list">
+								<?php foreach ( $items as $cap ) : ?>
+									<?php
+									$label       = (string) ( $cap['label'] ?? '' );
+									$base        = (string) ( $cap['base'] ?? '' );
+									$description = (string) ( $cap['description'] ?? '' );
+									$methods     = array_values( array_filter( (array) ( $cap['methods'] ?? array() ), 'is_string' ) );
+									$methods     = array_map( 'strtoupper', $methods );
+									sort( $methods );
+									?>
+									<li class="asdevs-ai-admin__caps-item">
+										<div class="asdevs-ai-admin__caps-copy">
+											<?php if ( '' !== $label ) : ?>
+												<span class="asdevs-ai-admin__caps-label"><?php echo esc_html( $label ); ?></span>
+											<?php endif; ?>
+											<code class="asdevs-ai-admin__caps-route"><?php echo esc_html( $base ); ?></code>
+											<?php if ( '' !== $description ) : ?>
+												<span class="asdevs-ai-admin__caps-desc"><?php echo esc_html( $description ); ?></span>
+											<?php endif; ?>
+										</div>
+										<?php if ( array() !== $methods ) : ?>
+											<span class="asdevs-ai-admin__caps-methods" aria-label="<?php esc_attr_e( 'HTTP methods', 'asdevs-ai-assistant' ); ?>">
+												<?php foreach ( $methods as $method ) : ?>
+													<?php
+													$slug = strtolower( sanitize_html_class( $method ) );
+													?>
+													<span class="asdevs-ai-admin__caps-method asdevs-ai-admin__caps-method--<?php echo esc_attr( $slug ); ?>">
+														<?php echo esc_html( $method ); ?>
+													</span>
+												<?php endforeach; ?>
+											</span>
+										<?php endif; ?>
+									</li>
+								<?php endforeach; ?>
+							</ul>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</section>
+		<?php
+	}
+
+	/**
+	 * SVG menu icon as a data URI (chat bubble, matches the screen mark).
+	 */
+	private function menu_icon(): string {
+		$svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="black"><path d="M10 2c.72 1.9 1.31 2.53 3.22 3.25-1.91.72-2.5 1.35-3.22 3.25-.72-1.9-1.31-2.53-3.22-3.25C8.69 4.53 9.28 3.9 10 2z"/><path d="M15.1 9c.44 1.16.81 1.53 1.97 1.97-1.16.44-1.53.81-1.97 1.97-.44-1.16-.81-1.53-1.97-1.97 1.16-.44 1.53-.81 1.97-1.97z" opacity=".7"/><path d="M5.7 11.6c.34.9.62 1.19 1.53 1.53-.91.34-1.19.62-1.53 1.53-.34-.91-.62-1.19-1.53-1.53.91-.34 1.19-.62 1.53-1.53z" opacity=".45"/></svg>';
+
+		return 'data:image/svg+xml;base64,' . base64_encode( $svg ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Required for WP admin menu SVG icons.
+	}
 }

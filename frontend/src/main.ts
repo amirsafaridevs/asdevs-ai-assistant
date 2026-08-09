@@ -1,9 +1,19 @@
 import { createApp } from 'vue';
-import { createPinia } from 'pinia';
 import App from './App.vue';
+import './styles.css';
 
-const app = createApp(App);
-const pinia = createPinia();
+const mount = (): void => {
+  const root = document.getElementById('asdevs-ai-assistant-root');
 
-app.use(pinia);
-app.mount('#asdevs-ai-assistant-app');
+  if (!root) {
+    return;
+  }
+
+  createApp(App).mount(root);
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mount, { once: true });
+} else {
+  mount();
+}

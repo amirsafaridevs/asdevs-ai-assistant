@@ -1,39 +1,15 @@
-# WordPress
-wp-config.php
-wp-content/uploads/
-wp-content/upgrade/
-wp-content/cache/
-
-# Composer
-vendor/
-composer.lock
-
-# Node / Frontend
-frontend/node_modules/
-frontend/dist/
-
-# Build artifacts
-assets/dist/
-
-# IDE
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# OS
+/vendor/
+/node_modules/
+/frontend/node_modules/
+/assets/dist/
+/release-build/
+/final/
+*.zip
+*.log
 .DS_Store
 Thumbs.db
-*.log
-
-# Environment
 .env
-.env.local
-.env.*.local
-
-# Tests
-coverage/
+.env.*
 .phpunit.result.cache
-
-# WordPress plugin check artifacts
-asdevs-ai-assistant-asdevs-ai-assistant-check-results-*.txt
+/languages/*.mo
+/build/
