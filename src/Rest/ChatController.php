@@ -10,10 +10,12 @@ declare( strict_types=1 );
 namespace ASDevs\AIAssistant\Rest;
 
 use ASDevs\AIAssistant\Ai\AiUnavailable;
+use ASDevs\AIAssistant\Ai\AiProvider;
 use ASDevs\AIAssistant\Ai\ChatRequest;
 use ASDevs\AIAssistant\Ai\ProviderRegistry;
 use ASDevs\AIAssistant\Ai\SystemPrompt;
 use ASDevs\AIAssistant\Ai\ToolCatalog;
+use ASDevs\AIAssistant\Skills\SkillStore;
 use WP_Error;
 use WP_REST_Request;
 
@@ -52,16 +54,25 @@ final class ChatController extends Controller {
 	private ToolCatalog $tools;
 
 	/**
+	 * Skills.
+	 *
+	 * @var SkillStore
+	 */
+	private SkillStore $skills;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ProviderRegistry $providers Providers.
 	 * @param SystemPrompt     $prompt    Instructions.
 	 * @param ToolCatalog      $tools     Tools.
+	 * @param SkillStore       $skills    Skills.
 	 */
-	public function __construct( ProviderRegistry $providers, SystemPrompt $prompt, ToolCatalog $tools ) {
+	public function __construct( ProviderRegistry $providers, SystemPrompt $prompt, ToolCatalog $tools, SkillStore $skills ) {
 		$this->providers = $providers;
 		$this->prompt    = $prompt;
 		$this->tools     = $tools;
+		$this->skills    = $skills;
 	}
 
 	/**
@@ -74,7 +85,7 @@ final class ChatController extends Controller {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'handle' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
 			)
 		);
 	}
@@ -110,10 +121,15 @@ final class ChatController extends Controller {
 			);
 		}
 
+		$mode   = $this->mode_from( $request );
+		$skills = $this->skills_from( $request );
+		$model  = $this->model_from( $request, $provider );
+
 		$chat = new ChatRequest(
-			$this->prompt->build( $this->array_param( $request, 'page' ) ),
+			$this->prompt->build( $this->array_param( $request, 'page' ), $mode, $skills ),
 			$messages,
-			$this->tools->definitions()
+			$this->tools->definitions( $mode ),
+			$model
 		);
 
 		$this->open_stream();
@@ -139,6 +155,89 @@ final class ChatController extends Controller {
 		$this->emit( array( 'type' => 'end' ) );
 
 		exit;
+	}
+
+	/**
+	 * Active assistant mode from the browser: agent (default) or ask.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 */
+	private function mode_from( WP_REST_Request $request ): string {
+		$mode = strtolower( sanitize_key( (string) $request->get_param( 'mode' ) ) );
+
+		return 'ask' === $mode ? 'ask' : 'agent';
+	}
+
+	/**
+	 * Preferred model id from the browser for the active connector.
+	 *
+	 * Empty / "auto" means the AI Client chooses. Unknown ids are ignored so a
+	 * stale localStorage value cannot break chat after provider changes.
+	 *
+	 * @param WP_REST_Request $request  The request.
+	 * @param AiProvider      $provider Active provider.
+	 */
+	private function model_from( WP_REST_Request $request, AiProvider $provider ): string {
+		$raw = trim( (string) $request->get_param( 'model' ) );
+
+		if ( '' === $raw || 'auto' === strtolower( $raw ) ) {
+			return '';
+		}
+
+		// Model ids are provider-defined (dots, slashes, colons) — not WP keys.
+		$model = sanitize_text_field( $raw );
+
+		if ( '' === $model || strlen( $model ) > 191 ) {
+			return '';
+		}
+
+		$known = $provider->models();
+
+		if ( array() !== $known && ! isset( $known[ $model ] ) ) {
+			return '';
+		}
+
+		return $model;
+	}
+
+	/**
+	 * Active skill slugs from the browser (validated against stored skills).
+	 *
+	 * @param WP_REST_Request $request The request.
+	 *
+	 * @return array<int, string>
+	 */
+	private function skills_from( WP_REST_Request $request ): array {
+		$raw = $request->get_param( 'skills' );
+
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		$slugs = array();
+
+		foreach ( array_slice( $raw, 0, 10 ) as $value ) {
+			if ( ! is_string( $value ) && ! is_numeric( $value ) ) {
+				continue;
+			}
+
+			$slug = sanitize_title( (string) $value );
+
+			if ( '' === $slug ) {
+				continue;
+			}
+
+			$slugs[] = $slug;
+		}
+
+		$resolved = $this->skills->resolve_for_prompt( $slugs );
+
+		return array_values(
+			array_map(
+				static fn( array $skill ): string => (string) $skill['slug'],
+				$resolved
+			)
+		);
 	}
 
 	/**
@@ -241,8 +340,71 @@ final class ChatController extends Controller {
 				continue;
 			}
 
-			// Tool / thinking blocks are opaque to this layer — pass through as received.
-			$blocks[] = $block;
+			// Opaque-to-this-layer blocks still need a stable shape for the next turn.
+			if ( 'thinking' === $type ) {
+				$blocks[] = array(
+					'type'      => 'thinking',
+					'thinking'  => isset( $block['thinking'] ) ? (string) $block['thinking'] : '',
+					'signature' => isset( $block['signature'] ) ? (string) $block['signature'] : '',
+				);
+
+				continue;
+			}
+
+			if ( 'redacted_thinking' === $type ) {
+				$data = isset( $block['data'] ) ? (string) $block['data'] : '';
+
+				if ( '' !== $data ) {
+					$blocks[] = array(
+						'type' => 'redacted_thinking',
+						'data' => $data,
+					);
+				}
+
+				continue;
+			}
+
+			if ( 'tool_use' === $type ) {
+				$id   = isset( $block['id'] ) ? (string) $block['id'] : '';
+				$name = isset( $block['name'] ) ? sanitize_key( (string) $block['name'] ) : '';
+
+				if ( '' === $id || '' === $name ) {
+					continue;
+				}
+
+				$input = $block['input'] ?? array();
+
+				$blocks[] = array(
+					'type'  => 'tool_use',
+					'id'    => sanitize_text_field( $id ),
+					'name'  => $name,
+					'input' => is_array( $input ) ? $input : array(),
+				);
+
+				continue;
+			}
+
+			if ( 'tool_result' === $type ) {
+				$id = isset( $block['tool_use_id'] ) ? (string) $block['tool_use_id'] : '';
+
+				if ( '' === $id ) {
+					continue;
+				}
+
+				$result = $block['content'] ?? '';
+
+				if ( ! is_string( $result ) ) {
+					$encoded = wp_json_encode( $result );
+					$result  = is_string( $encoded ) ? $encoded : '';
+				}
+
+				$blocks[] = array(
+					'type'        => 'tool_result',
+					'tool_use_id' => sanitize_text_field( $id ),
+					'content'     => $result,
+					'is_error'    => ! empty( $block['is_error'] ),
+				);
+			}
 		}
 
 		return $blocks;

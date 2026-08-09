@@ -11,6 +11,7 @@ namespace ASDevs\AIAssistant\Admin;
 
 use ASDevs\AIAssistant\Ai\ProviderRegistry;
 use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Discovery\CapabilityMap;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -48,14 +49,23 @@ final class SettingsPage {
 	private ProviderRegistry $providers;
 
 	/**
+	 * Site capability map the assistant discovers.
+	 *
+	 * @var CapabilityMap
+	 */
+	private CapabilityMap $capabilities;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings         $settings  Settings.
-	 * @param ProviderRegistry $providers Providers.
+	 * @param Settings         $settings     Settings.
+	 * @param ProviderRegistry $providers    Providers.
+	 * @param CapabilityMap    $capabilities Capability map.
 	 */
-	public function __construct( Settings $settings, ProviderRegistry $providers ) {
-		$this->settings  = $settings;
-		$this->providers = $providers;
+	public function __construct( Settings $settings, ProviderRegistry $providers, CapabilityMap $capabilities ) {
+		$this->settings     = $settings;
+		$this->providers    = $providers;
+		$this->capabilities = $capabilities;
 	}
 
 	/**
@@ -140,6 +150,8 @@ final class SettingsPage {
 		$ready     = $this->providers->is_ready();
 		$providers = $this->providers->all();
 		$updated   = isset( $_GET['updated'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
+		$map       = $this->capabilities->all();
+		$caps      = is_array( $map['capabilities'] ?? null ) ? $map['capabilities'] : array();
 		?>
 		<div class="wrap asdevs-ai-admin-wrap">
 			<h1><?php esc_html_e( 'AI Assistant', 'asdevs-ai-assistant' ); ?></h1>
@@ -270,12 +282,110 @@ final class SettingsPage {
 					<section class="asdevs-ai-admin__card asdevs-ai-admin__privacy">
 						<h3 class="asdevs-ai-admin__card-title"><?php esc_html_e( 'What leaves your site', 'asdevs-ai-assistant' ); ?></h3>
 						<p class="asdevs-ai-admin__privacy-body">
-							<?php esc_html_e( 'When you write to the assistant, your message, the recent conversation, and the site information needed to answer it are sent to the AI provider behind the WordPress connector you selected. Nothing is sent to us. Conversations are stored on this site, for your account only, and you can delete them at any time from the assistant.', 'asdevs-ai-assistant' ); ?>
+							<?php esc_html_e( 'When you write to the assistant, your message, the current conversation, and the site information needed to answer it are sent to the AI provider behind the WordPress connector you selected. Nothing is sent to us. Your active chat is stored on this site, for your account only, and starting a new chat deletes it.', 'asdevs-ai-assistant' ); ?>
 						</p>
 					</section>
+
+					<?php $this->render_capabilities( $caps ); ?>
 				</div>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Render the same capability list the assistant discovers via /capabilities.
+	 *
+	 * @param array<int, array<string, mixed>> $caps Capability collections.
+	 */
+	private function render_capabilities( array $caps ): void {
+		$grouped = array();
+
+		foreach ( $caps as $cap ) {
+			if ( ! is_array( $cap ) ) {
+				continue;
+			}
+
+			$namespace = (string) ( $cap['namespace'] ?? '' );
+			if ( '' === $namespace ) {
+				$namespace = __( 'Other', 'asdevs-ai-assistant' );
+			}
+
+			$grouped[ $namespace ][] = $cap;
+		}
+
+		$count = count( $caps );
+		?>
+		<section class="asdevs-ai-admin__card asdevs-ai-admin__caps">
+			<div class="asdevs-ai-admin__card-head">
+				<div>
+					<h3 class="asdevs-ai-admin__card-title"><?php esc_html_e( 'What the assistant can reach', 'asdevs-ai-assistant' ); ?></h3>
+					<p class="asdevs-ai-admin__card-desc">
+						<?php esc_html_e( 'Live REST routes available to your account — the same map the assistant discovers before it acts.', 'asdevs-ai-assistant' ); ?>
+					</p>
+				</div>
+				<span class="asdevs-ai-admin__caps-count" title="<?php esc_attr_e( 'Capabilities', 'asdevs-ai-assistant' ); ?>">
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: %d: number of REST capability collections */
+							_n( '%d capability', '%d capabilities', $count, 'asdevs-ai-assistant' ),
+							$count
+						)
+					);
+					?>
+				</span>
+			</div>
+
+			<?php if ( array() === $grouped ) : ?>
+				<p class="asdevs-ai-admin__caps-empty">
+					<?php esc_html_e( 'No reachable REST capabilities were found for your account.', 'asdevs-ai-assistant' ); ?>
+				</p>
+			<?php else : ?>
+				<div class="asdevs-ai-admin__caps-scroll">
+					<?php foreach ( $grouped as $namespace => $items ) : ?>
+						<div class="asdevs-ai-admin__caps-group">
+							<h4 class="asdevs-ai-admin__caps-ns"><?php echo esc_html( (string) $namespace ); ?></h4>
+							<ul class="asdevs-ai-admin__caps-list">
+								<?php foreach ( $items as $cap ) : ?>
+									<?php
+									$label       = (string) ( $cap['label'] ?? '' );
+									$base        = (string) ( $cap['base'] ?? '' );
+									$description = (string) ( $cap['description'] ?? '' );
+									$methods     = array_values( array_filter( (array) ( $cap['methods'] ?? array() ), 'is_string' ) );
+									$methods     = array_map( 'strtoupper', $methods );
+									sort( $methods );
+									?>
+									<li class="asdevs-ai-admin__caps-item">
+										<div class="asdevs-ai-admin__caps-copy">
+											<?php if ( '' !== $label ) : ?>
+												<span class="asdevs-ai-admin__caps-label"><?php echo esc_html( $label ); ?></span>
+											<?php endif; ?>
+											<code class="asdevs-ai-admin__caps-route"><?php echo esc_html( $base ); ?></code>
+											<?php if ( '' !== $description ) : ?>
+												<span class="asdevs-ai-admin__caps-desc"><?php echo esc_html( $description ); ?></span>
+											<?php endif; ?>
+										</div>
+										<?php if ( array() !== $methods ) : ?>
+											<span class="asdevs-ai-admin__caps-methods" aria-label="<?php esc_attr_e( 'HTTP methods', 'asdevs-ai-assistant' ); ?>">
+												<?php foreach ( $methods as $method ) : ?>
+													<?php
+													$slug = strtolower( sanitize_html_class( $method ) );
+													?>
+													<span class="asdevs-ai-admin__caps-method asdevs-ai-admin__caps-method--<?php echo esc_attr( $slug ); ?>">
+														<?php echo esc_html( $method ); ?>
+													</span>
+												<?php endforeach; ?>
+											</span>
+										<?php endif; ?>
+									</li>
+								<?php endforeach; ?>
+							</ul>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</section>
 		<?php
 	}
 

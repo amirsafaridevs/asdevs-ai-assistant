@@ -43,6 +43,9 @@ final class SiteSnapshot {
 			'site'    => array(
 				'name'         => get_bloginfo( 'name' ),
 				'description'  => get_bloginfo( 'description' ),
+				'url'          => home_url( '/' ),
+				'admin_url'    => admin_url(),
+				'rest_url'     => rest_url(),
 				'locale'       => get_user_locale(),
 				'admin_locale' => get_locale(),
 				'timezone'     => wp_timezone_string(),
@@ -50,7 +53,6 @@ final class SiteSnapshot {
 				'time_format'  => (string) get_option( 'time_format' ),
 				'is_rtl'       => is_rtl(),
 				'is_multisite' => is_multisite(),
-				'admin_url'    => admin_url(),
 			),
 			'user'    => $this->current_user(),
 			'content' => $this->content_counts(),

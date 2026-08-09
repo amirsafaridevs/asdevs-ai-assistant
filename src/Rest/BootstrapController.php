@@ -13,6 +13,7 @@ use ASDevs\AIAssistant\Ai\ProviderRegistry;
 use ASDevs\AIAssistant\Context\SiteSnapshot;
 use ASDevs\AIAssistant\Context\StartSuggestions;
 use ASDevs\AIAssistant\Conversations\ConversationStore;
+use ASDevs\AIAssistant\Legal\Terms;
 use WP_REST_Response;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -39,7 +40,7 @@ final class BootstrapController extends Controller {
 	private StartSuggestions $suggestions;
 
 	/**
-	 * Conversation history.
+	 * Active conversation store.
 	 *
 	 * @var ConversationStore
 	 */
@@ -53,23 +54,33 @@ final class BootstrapController extends Controller {
 	private ProviderRegistry $providers;
 
 	/**
+	 * Terms of use.
+	 *
+	 * @var Terms
+	 */
+	private Terms $terms;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param SiteSnapshot      $snapshot      Site snapshot.
 	 * @param StartSuggestions  $suggestions   Opening suggestions.
-	 * @param ConversationStore $conversations Conversation history.
+	 * @param ConversationStore $conversations Active conversation store.
 	 * @param ProviderRegistry  $providers     Providers.
+	 * @param Terms             $terms         Terms of use.
 	 */
 	public function __construct(
 		SiteSnapshot $snapshot,
 		StartSuggestions $suggestions,
 		ConversationStore $conversations,
-		ProviderRegistry $providers
+		ProviderRegistry $providers,
+		Terms $terms
 	) {
 		$this->snapshot      = $snapshot;
 		$this->suggestions   = $suggestions;
 		$this->conversations = $conversations;
 		$this->providers     = $providers;
+		$this->terms         = $terms;
 	}
 
 	/**
@@ -91,9 +102,44 @@ final class BootstrapController extends Controller {
 	 * Handle the request.
 	 */
 	public function handle(): WP_REST_Response {
-		$snapshot = $this->snapshot->get();
+		$user_id = get_current_user_id();
+		$terms   = $this->terms->for_user( $user_id );
 
-		$ready = $this->providers->is_ready();
+		// Until the current terms version is accepted, do not expose chat or site data.
+		if ( ! $terms['accepted'] ) {
+			return new WP_REST_Response(
+				array(
+					'ready'         => false,
+					'ready_detail'  => '',
+					'can_configure' => false,
+					'settings_url'  => '',
+					'provider'      => '',
+					'models'        => array(),
+					'site'          => array(),
+					'user'          => array(
+						'display_name' => '',
+						'roles'        => array(),
+					),
+					'suggestions'   => array(),
+					'conversation'  => null,
+					'terms'         => $terms,
+				)
+			);
+		}
+
+		$snapshot = $this->snapshot->get();
+		$ready    = $this->providers->is_ready();
+		$selected = $this->providers->selected();
+		$models   = array();
+
+		if ( null !== $selected ) {
+			foreach ( $selected->models() as $id => $label ) {
+				$models[] = array(
+					'id'    => (string) $id,
+					'label' => (string) $label,
+				);
+			}
+		}
 
 		return new WP_REST_Response(
 			array(
@@ -101,10 +147,13 @@ final class BootstrapController extends Controller {
 				'ready_detail'  => $ready ? '' : $this->providers->not_ready_detail(),
 				'can_configure' => current_user_can( 'manage_options' ),
 				'settings_url'  => admin_url( 'admin.php?page=' . ASDEVS_AI_ASSISTANT_SLUG ),
+				'provider'      => null !== $selected ? $selected->id() : '',
+				'models'        => $models,
 				'site'          => $snapshot['site'],
 				'user'          => $snapshot['user'],
 				'suggestions'   => $this->suggestions->get(),
-				'conversations' => $this->conversations->index( get_current_user_id() ),
+				'conversation'  => $this->conversations->get( $user_id ),
+				'terms'         => $terms,
 			)
 		);
 	}

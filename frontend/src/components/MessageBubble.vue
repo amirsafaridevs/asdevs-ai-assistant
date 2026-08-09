@@ -318,10 +318,6 @@ watch(
       </div>
     </template>
 
-    <p v-if="bubble.links && bubble.links.length" class="asdevs-ai-msg__links">
-      <a v-for="link in bubble.links" :key="link.href" :href="link.href" class="asdevs-ai-link">{{ link.label }}</a>
-    </p>
-
     <div v-if="bubble.error" class="asdevs-ai-notice" role="status">
       <p class="asdevs-ai-notice__message">{{ bubble.error.message }}</p>
       <div class="asdevs-ai-notice__actions">

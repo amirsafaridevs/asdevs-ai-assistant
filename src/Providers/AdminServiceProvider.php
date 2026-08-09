@@ -14,6 +14,7 @@ use ASDevs\AIAssistant\Ai\ProviderRegistry;
 use ASDevs\AIAssistant\Ai\Settings;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Discovery\CapabilityMap;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -32,7 +33,8 @@ final class AdminServiceProvider extends ServiceProvider {
 			SettingsPage::class,
 			static fn( Container $container ) => new SettingsPage(
 				$container->get( Settings::class ),
-				$container->get( ProviderRegistry::class )
+				$container->get( ProviderRegistry::class ),
+				$container->get( CapabilityMap::class )
 			)
 		);
 	}

@@ -11,6 +11,7 @@ namespace ASDevs\AIAssistant\Providers;
 
 use ASDevs\AIAssistant\Context\PageContext;
 use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Legal\Terms;
 use ASDevs\AIAssistant\Rest\Controller;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -53,11 +54,13 @@ final class AssetServiceProvider extends ServiceProvider {
 			return;
 		}
 
+		$version = (string) filemtime( $script );
+
 		wp_enqueue_script(
 			self::HANDLE,
 			ASDEVS_AI_ASSISTANT_URL . 'assets/dist/main.js',
 			array( 'wp-i18n' ),
-			ASDEVS_AI_ASSISTANT_VERSION,
+			$version,
 			true
 		);
 
@@ -66,7 +69,7 @@ final class AssetServiceProvider extends ServiceProvider {
 				self::HANDLE,
 				ASDEVS_AI_ASSISTANT_URL . 'assets/dist/main.css',
 				array(),
-				ASDEVS_AI_ASSISTANT_VERSION
+				(string) filemtime( $style )
 			);
 		}
 
@@ -104,6 +107,7 @@ final class AssetServiceProvider extends ServiceProvider {
 			'locale'   => get_user_locale(),
 			'isRtl'    => is_rtl(),
 			'page'     => $this->container->get( PageContext::class )->current(),
+			'terms'    => $this->container->get( Terms::class )->for_user( get_current_user_id() ),
 		);
 	}
 

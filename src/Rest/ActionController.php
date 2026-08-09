@@ -53,7 +53,7 @@ final class ActionController extends Controller {
 			array(
 				'methods'             => 'POST',
 				'callback'            => array( $this, 'handle' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
 				'args'                => array(
 					'method'       => array(
 						'type'              => 'string',

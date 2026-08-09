@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Rest;
 
+use ASDevs\AIAssistant\Legal\Terms;
 use WP_Error;
 use WP_REST_Request;
 
@@ -55,6 +56,31 @@ abstract class Controller {
 			return new WP_Error(
 				'asdevs_ai_bad_nonce',
 				__( 'This page has been open for a while. Reload it and try again.', 'asdevs-ai-assistant' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Same as check_permission, plus acceptance of the current terms version.
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function check_terms_permission() {
+		$allowed = $this->check_permission();
+
+		if ( is_wp_error( $allowed ) ) {
+			return $allowed;
+		}
+
+		$terms = new Terms();
+
+		if ( ! $terms->has_accepted( get_current_user_id() ) ) {
+			return new WP_Error(
+				'asdevs_ai_terms_required',
+				__( 'Please accept the terms of use before using the assistant.', 'asdevs-ai-assistant' ),
 				array( 'status' => 403 )
 			);
 		}

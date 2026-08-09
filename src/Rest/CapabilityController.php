@@ -48,7 +48,7 @@ final class CapabilityController extends Controller {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( $this, 'list_all' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
 				'args'                => array(
 					'refresh' => array(
 						'type'    => 'boolean',
@@ -64,7 +64,7 @@ final class CapabilityController extends Controller {
 			array(
 				'methods'             => 'GET',
 				'callback'            => array( $this, 'describe' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
 				'args'                => array(
 					'route' => array(
 						'type'              => 'string',

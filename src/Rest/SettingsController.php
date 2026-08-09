@@ -105,7 +105,7 @@ final class SettingsController extends Controller {
 	 * @return bool|WP_Error
 	 */
 	public function check_admin_permission() {
-		$allowed = $this->check_permission();
+		$allowed = $this->check_terms_permission();
 
 		if ( is_wp_error( $allowed ) ) {
 			return $allowed;
@@ -139,9 +139,19 @@ final class SettingsController extends Controller {
 		$selected = $this->providers->selected();
 		$provider = $this->settings->provider();
 		$ready    = $this->providers->is_ready();
+		$models   = array();
 
 		if ( '' === $provider && null !== $selected ) {
 			$provider = $selected->id();
+		}
+
+		if ( null !== $selected ) {
+			foreach ( $selected->models() as $id => $label ) {
+				$models[] = array(
+					'id'    => (string) $id,
+					'label' => (string) $label,
+				);
+			}
 		}
 
 		return new WP_REST_Response(
@@ -150,6 +160,7 @@ final class SettingsController extends Controller {
 				'ready'          => $ready,
 				'ready_detail'   => $ready ? '' : $this->providers->not_ready_detail(),
 				'providers'      => $providers,
+				'models'         => $models,
 				'connectors_url' => admin_url( 'options-connectors.php' ),
 			)
 		);

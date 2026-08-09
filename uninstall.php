@@ -23,8 +23,27 @@ function asdevs_ai_assistant_uninstall_site(): void {
 	delete_option( 'asdevs_ai_assistant_service' );
 	delete_option( 'asdevs_ai_assistant_memory' );
 
+	// Skill prompts are stored as a custom post type.
+	$skill_ids = get_posts(
+		array(
+			'post_type'              => 'asdevs_ai_skill',
+			'post_status'            => 'any',
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+		)
+	);
+
+	foreach ( $skill_ids as $skill_id ) {
+		wp_delete_post( (int) $skill_id, true );
+	}
+
 	// Core API deletes the key for every user (object_id is ignored when delete_all is true).
+	delete_metadata( 'user', 0, 'asdevs_ai_assistant_active_chat', '', true );
 	delete_metadata( 'user', 0, 'asdevs_ai_assistant_conversations', '', true );
+	delete_metadata( 'user', 0, 'asdevs_ai_assistant_terms', '', true );
 
 	// Prefixed options (transients + timeouts) have no bulk-delete API in core.
 	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching

@@ -15,9 +15,11 @@ use ASDevs\AIAssistant\Providers\AssetServiceProvider;
 use ASDevs\AIAssistant\Providers\ContextServiceProvider;
 use ASDevs\AIAssistant\Providers\DiscoveryServiceProvider;
 use ASDevs\AIAssistant\Providers\ConversationServiceProvider;
+use ASDevs\AIAssistant\Providers\LegalServiceProvider;
 use ASDevs\AIAssistant\Providers\PolicyServiceProvider;
 use ASDevs\AIAssistant\Providers\RestApiServiceProvider;
 use ASDevs\AIAssistant\Providers\SettingsServiceProvider;
+use ASDevs\AIAssistant\Providers\SkillsServiceProvider;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -115,6 +117,8 @@ final class Plugin {
 			DiscoveryServiceProvider::class,
 			ContextServiceProvider::class,
 			ConversationServiceProvider::class,
+			LegalServiceProvider::class,
+			SkillsServiceProvider::class,
 			AiServiceProvider::class,
 			RestApiServiceProvider::class,
 			AdminServiceProvider::class,

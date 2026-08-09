@@ -20,6 +20,7 @@ use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
 use ASDevs\AIAssistant\Discovery\CapabilityMap;
 use ASDevs\AIAssistant\Execution\ActionExecutor;
+use ASDevs\AIAssistant\Legal\Terms;
 use ASDevs\AIAssistant\Memory\MemoryStore;
 use ASDevs\AIAssistant\Rest\ActionController;
 use ASDevs\AIAssistant\Rest\BootstrapController;
@@ -29,6 +30,9 @@ use ASDevs\AIAssistant\Rest\ConversationController;
 use ASDevs\AIAssistant\Rest\Controller;
 use ASDevs\AIAssistant\Rest\MemoryController;
 use ASDevs\AIAssistant\Rest\SettingsController;
+use ASDevs\AIAssistant\Rest\SkillsController;
+use ASDevs\AIAssistant\Rest\TermsController;
+use ASDevs\AIAssistant\Skills\SkillStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -49,8 +53,14 @@ final class RestApiServiceProvider extends ServiceProvider {
 				$container->get( SiteSnapshot::class ),
 				$container->get( StartSuggestions::class ),
 				$container->get( ConversationStore::class ),
-				$container->get( ProviderRegistry::class )
+				$container->get( ProviderRegistry::class ),
+				$container->get( Terms::class )
 			)
+		);
+
+		$this->container->singleton(
+			TermsController::class,
+			static fn( Container $container ) => new TermsController( $container->get( Terms::class ) )
 		);
 
 		$this->container->singleton(
@@ -68,8 +78,14 @@ final class RestApiServiceProvider extends ServiceProvider {
 			static fn( Container $container ) => new ChatController(
 				$container->get( ProviderRegistry::class ),
 				$container->get( SystemPrompt::class ),
-				$container->get( ToolCatalog::class )
+				$container->get( ToolCatalog::class ),
+				$container->get( SkillStore::class )
 			)
+		);
+
+		$this->container->singleton(
+			SkillsController::class,
+			static fn( Container $container ) => new SkillsController( $container->get( SkillStore::class ) )
 		);
 
 		$this->container->singleton(
@@ -117,12 +133,14 @@ final class RestApiServiceProvider extends ServiceProvider {
 	private function controllers(): array {
 		return array(
 			BootstrapController::class,
+			TermsController::class,
 			CapabilityController::class,
 			ActionController::class,
 			ChatController::class,
 			ConversationController::class,
 			SettingsController::class,
 			MemoryController::class,
+			SkillsController::class,
 		);
 	}
 }

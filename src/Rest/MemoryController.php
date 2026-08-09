@@ -50,12 +50,12 @@ final class MemoryController extends Controller {
 				array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'index' ),
-					'permission_callback' => array( $this, 'check_permission' ),
+					'permission_callback' => array( $this, 'check_terms_permission' ),
 				),
 				array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'write' ),
-					'permission_callback' => array( $this, 'check_permission' ),
+					'permission_callback' => array( $this, 'check_terms_permission' ),
 				),
 			)
 		);
@@ -66,7 +66,7 @@ final class MemoryController extends Controller {
 			array(
 				'methods'             => 'DELETE',
 				'callback'            => array( $this, 'delete' ),
-				'permission_callback' => array( $this, 'check_permission' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
 				'args'                => array(
 					'id' => array(
 						'type'              => 'string',

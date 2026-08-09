@@ -2,10 +2,10 @@ import type {
   BootData,
   Bootstrap,
   ConnectorTestResult,
-  ConversationSummary,
   Message,
   Outcome,
   ServiceSettings,
+  Skill,
   StreamEvent,
 } from './types';
 
@@ -21,6 +21,8 @@ declare global {
   }
 }
 
+export type AgentMode = 'agent' | 'ask';
+
 export const boot: BootData = window.asdevsAiAssistant ?? {
   restUrl: '',
   siteRest: '',
@@ -29,6 +31,7 @@ export const boot: BootData = window.asdevsAiAssistant ?? {
   locale: 'en_US',
   isRtl: false,
   page: {},
+  terms: { version: '', accepted: false, sections: [] },
 };
 
 /** Translate through WordPress so every string ships translatable. */
@@ -76,16 +79,33 @@ export const api = {
   testConnector: (provider: string) =>
     request<ConnectorTestResult>('/settings/test', { method: 'POST', body: JSON.stringify({ provider }) }),
 
-  conversations: () => request<ConversationSummary[]>('/conversations'),
+  conversation: () =>
+    request<{
+      id: string;
+      title: string;
+      messages: Message[];
+      pending?: unknown;
+      choices?: unknown;
+      unfinished?: boolean;
+      updated_at?: number;
+    }>('/conversation'),
 
-  conversation: (id: string) => request<{ id: string; title: string; messages: Message[] }>(`/conversations/${id}`),
+  saveConversation: (payload: {
+    id: string;
+    title: string;
+    messages: Message[];
+    pending?: unknown;
+    choices?: unknown;
+    unfinished: boolean;
+  }) => request<{ saved: boolean }>('/conversation', { method: 'POST', body: JSON.stringify(payload) }),
 
-  saveConversation: (payload: { id: string; title: string; messages: Message[]; unfinished: boolean }) =>
-    request<{ saved: boolean }>('/conversations', { method: 'POST', body: JSON.stringify(payload) }),
+  clearConversation: () => request<{ deleted: boolean }>('/conversation', { method: 'DELETE' }),
 
-  deleteConversation: (id: string) => request<{ deleted: boolean }>(`/conversations/${id}`, { method: 'DELETE' }),
-
-  clearConversations: () => request<{ deleted: boolean }>('/conversations', { method: 'DELETE' }),
+  acceptTerms: (version: string) =>
+    request<{ accepted: boolean; version: string }>('/terms/accept', {
+      method: 'POST',
+      body: JSON.stringify({ version }),
+    }),
 
   memoryList: () => request<{ items: Array<Record<string, unknown>> }>('/memory'),
 
@@ -94,6 +114,20 @@ export const api = {
 
   memoryDelete: (id: string) =>
     request<{ deleted: boolean; id: string }>(`/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  skills: () => request<{ items: Skill[] }>('/skills'),
+
+  createSkill: (payload: { title: string; slug?: string; prompt: string; description?: string }) =>
+    request<{ item: Skill }>('/skills', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateSkill: (
+    id: number,
+    payload: { title: string; slug?: string; prompt: string; description?: string }
+  ) =>
+    request<{ item: Skill }>(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  deleteSkill: (id: number) =>
+    request<{ deleted: boolean; id: number }>(`/skills/${id}`, { method: 'DELETE' }),
 };
 
 /** Page context merged with the live browser title for the model. */
@@ -116,7 +150,10 @@ export function currentPage(): BootData['page'] {
 export async function streamChat(
   messages: Message[],
   onEvent: (event: StreamEvent) => void,
-  signal: AbortSignal
+  signal: AbortSignal,
+  mode: AgentMode = 'agent',
+  skills: string[] = [],
+  model = 'auto'
 ): Promise<void> {
   const response = await fetch(`${boot.restUrl}/chat`, {
     method: 'POST',
@@ -126,7 +163,7 @@ export async function streamChat(
       'Content-Type': 'application/json',
       'X-WP-Nonce': boot.nonce,
     },
-    body: JSON.stringify({ messages, page: currentPage() }),
+    body: JSON.stringify({ messages, page: currentPage(), mode, skills, model }),
   });
 
   if (!response.ok || !response.body) {

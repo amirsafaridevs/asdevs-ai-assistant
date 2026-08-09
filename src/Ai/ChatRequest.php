@@ -40,16 +40,25 @@ final class ChatRequest {
 	private array $tools;
 
 	/**
+	 * Explicit model id for the active provider, or empty for auto-select.
+	 *
+	 * @var string
+	 */
+	private string $model;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param string                           $system   System instructions.
 	 * @param array<int, array<string, mixed>> $messages Conversation messages.
 	 * @param array<int, array<string, mixed>> $tools    Tool definitions.
+	 * @param string                           $model    Provider model id, or empty for auto.
 	 */
-	public function __construct( string $system, array $messages, array $tools = array() ) {
+	public function __construct( string $system, array $messages, array $tools = array(), string $model = '' ) {
 		$this->system   = $system;
 		$this->messages = $messages;
 		$this->tools    = $tools;
+		$this->model    = $model;
 	}
 
 	/**
@@ -75,5 +84,12 @@ final class ChatRequest {
 	 */
 	public function tools(): array {
 		return $this->tools;
+	}
+
+	/**
+	 * Explicit model id, or empty when the AI Client should choose.
+	 */
+	public function model(): string {
+		return $this->model;
 	}
 }

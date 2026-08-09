@@ -1,6 +1,6 @@
 <?php
 /**
- * Conversation services.
+ * Terms of use services.
  *
  * @package ASDevs\AIAssistant
  */
@@ -9,34 +9,33 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Conversations\ConversationStore;
 use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Legal\Terms;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Registers the active conversation store.
+ * Registers terms acceptance storage.
  */
-final class ConversationServiceProvider extends ServiceProvider {
+final class LegalServiceProvider extends ServiceProvider {
 
 	/**
 	 * Bind services.
 	 */
 	public function register(): void {
-		$this->container->singleton( ConversationStore::class, static fn() => new ConversationStore() );
+		$this->container->singleton( Terms::class, static fn() => new Terms() );
 	}
 
 	/**
 	 * Wire to WordPress.
 	 */
 	public function boot(): void {
-		// When an account goes, its active chat goes with it.
 		add_action(
 			'delete_user',
 			function ( $user_id ): void {
-				$this->container->get( ConversationStore::class )->clear( (int) $user_id );
+				$this->container->get( Terms::class )->clear( (int) $user_id );
 			}
 		);
 	}

@@ -6,6 +6,18 @@ export interface BootData {
   locale: string;
   isRtl: boolean;
   page: PageContext;
+  terms?: TermsState;
+}
+
+export interface TermsSection {
+  heading: string;
+  body: string;
+}
+
+export interface TermsState {
+  version: string;
+  accepted: boolean;
+  sections: TermsSection[];
 }
 
 export interface PageContext {
@@ -37,17 +49,15 @@ export interface Bootstrap {
   ready_detail?: string;
   can_configure: boolean;
   settings_url: string;
+  /** Active connector id when ready. */
+  provider?: string;
+  /** Text-generation models for the active connector. */
+  models?: ModelInfo[];
   site: Record<string, unknown>;
   user: { display_name: string; roles: string[] };
   suggestions: Suggestion[];
-  conversations: ConversationSummary[];
-}
-
-export interface ConversationSummary {
-  id: string;
-  title: string;
-  updated_at: number;
-  unfinished: boolean;
+  conversation: ActiveConversation | null;
+  terms?: TermsState;
 }
 
 export type Block =
@@ -92,8 +102,6 @@ export interface Bubble {
   attachments?: MessageAttachment[];
   /** Everything that happened before the answer, in order. */
   steps?: Step[];
-  /** Panel deep-links after a change (edit / view / file). */
-  links?: Array<{ label: string; href: string }>;
   /** Soft live status (e.g. reconnecting) shown instead of the default typing label. */
   statusHint?: string | null;
   error?: { message: string; detail: string; retryable: boolean } | null;
@@ -105,11 +113,29 @@ export interface ProviderInfo {
   configured: boolean;
 }
 
+/** One chat model exposed by the active WordPress AI connector. */
+export interface ModelInfo {
+  id: string;
+  label: string;
+}
+
 export interface ServiceSettings {
   provider: string;
   ready: boolean;
   providers: ProviderInfo[];
+  models?: ModelInfo[];
   connectors_url: string;
+}
+
+/** A reusable instruction prompt the person can activate with /slug. */
+export interface Skill {
+  id: number;
+  title: string;
+  slug: string;
+  prompt: string;
+  description: string;
+  created_at?: number;
+  updated_at?: number;
 }
 
 export interface ConnectorTestResult {
@@ -132,7 +158,6 @@ export interface Outcome {
   code?: number;
   data?: unknown;
   total?: number | null;
-  links?: Record<string, string>;
   message?: string;
   kind?: string;
   details?: Record<string, unknown>;
@@ -158,6 +183,16 @@ export interface PendingConfirmation {
 
 export interface ChoiceSession {
   questions: Array<{ id: string; prompt: string; options: string[] }>;
+}
+
+export interface ActiveConversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  pending?: PendingConfirmation | null;
+  choices?: ChoiceSession | null;
+  unfinished?: boolean;
+  updated_at?: number;
 }
 
 export interface StreamEvent {

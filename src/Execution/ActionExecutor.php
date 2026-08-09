@@ -52,30 +52,20 @@ final class ActionExecutor {
 	private BulkGuard $bulk_guard;
 
 	/**
-	 * Panel link resolver.
-	 *
-	 * @var LinkResolver
-	 */
-	private LinkResolver $links;
-
-	/**
 	 * Constructor.
 	 *
 	 * @param RiskPolicy         $policy     Risk policy.
 	 * @param ConfirmationTokens $tokens     Confirmation tokens.
 	 * @param BulkGuard          $bulk_guard Repeated-write guard.
-	 * @param LinkResolver       $links      Panel link resolver.
 	 */
 	public function __construct(
 		RiskPolicy $policy,
 		ConfirmationTokens $tokens,
-		BulkGuard $bulk_guard,
-		LinkResolver $links
+		BulkGuard $bulk_guard
 	) {
 		$this->policy     = $policy;
 		$this->tokens     = $tokens;
 		$this->bulk_guard = $bulk_guard;
-		$this->links      = $links;
 	}
 
 	/**
@@ -159,7 +149,6 @@ final class ActionExecutor {
 			'code'   => $response->get_status(),
 			'data'   => $data,
 			'total'  => $this->total_from( $response->get_headers() ),
-			'links'  => $this->links->for_result( $action, $data ),
 		);
 	}
 

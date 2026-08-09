@@ -17,21 +17,27 @@ if ( ! defined( 'ABSPATH' ) ) {
  * A deliberately small tool surface.
  *
  * There is no per-feature tool: the assistant discovers what the site can do
- * and then reads or changes it through the site's own interface. That is what
+ * and then calls those REST routes through one generic API tool. That is what
  * lets a plugin nobody here has seen work on day one (section 13).
+ *
+ * Ask mode receives a read-only subset so the model cannot propose writes.
  */
 final class ToolCatalog {
 
 	/**
 	 * Tool definitions, in the neutral shape providers translate from.
 	 *
+	 * @param string $mode `agent` (full tools) or `ask` (read-only).
+	 *
 	 * @return array<int, array<string, mixed>>
 	 */
-	public function definitions(): array {
-		return array(
+	public function definitions( string $mode = 'agent' ): array {
+		$mode = 'ask' === $mode ? 'ask' : 'agent';
+
+		$tools = array(
 			array(
 				'name'         => 'list_capabilities',
-				'description'  => 'List what this specific site can do right now, discovered live from the site itself. Call this first when you do not already know whether the site supports something. Only capabilities the signed-in person is allowed to reach are listed.',
+				'description'  => 'List the REST APIs this site exposes right now, discovered live from WordPress, plugins, and themes. Each entry has base path, methods, and often a short description of what that API is for. Call this before claiming the site can or cannot do something. Only routes the signed-in person is allowed to reach are listed.',
 				'input_schema' => array(
 					'type'       => 'object',
 					'properties' => (object) array(),
@@ -39,77 +45,19 @@ final class ToolCatalog {
 			),
 			array(
 				'name'         => 'describe_capability',
-				'description'  => 'Show the exact parameters one capability accepts, so a change can be made correctly instead of guessed. Use the "base" or a path from list_capabilities.',
+				'description'  => 'Show what one REST route does and the exact parameters it accepts (descriptions, types, enums, defaults, min/max, array item types). Use a path from list_capabilities before call_api whenever you are unsure of the shape or meaning of the API. Do not invent fields.',
 				'input_schema' => array(
 					'type'       => 'object',
 					'properties' => array(
 						'route' => array(
 							'type'        => 'string',
-							'description' => 'A capability path, for example /wp/v2/posts.',
+							'description' => 'A REST path, for example /wp/v2/posts.',
 						),
 					),
 					'required'   => array( 'route' ),
 				),
 			),
-			array(
-				'name'         => 'read_site',
-				'description'  => 'Read information from the site. Never changes anything. Use query parameters to narrow results and keep them small.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => array(
-						'route'  => array(
-							'type'        => 'string',
-							'description' => 'A capability path, for example /wp/v2/posts or /wp/v2/posts/12.',
-						),
-						'params' => array(
-							'type'        => 'object',
-							'description' => 'Query parameters, for example {"status":"draft","per_page":10}.',
-						),
-					),
-					'required'   => array( 'route' ),
-				),
-			),
-			array(
-				'name'         => 'change_site',
-				'description'  => 'Create, update or delete something on the site. The server decides on its own whether the change needs the person to confirm first, and will say so; when it does, tell them plainly what will happen and wait. Never claim a change was made before this tool reports it succeeded.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => array(
-						'method' => array(
-							'type'        => 'string',
-							'enum'        => array( 'POST', 'PUT', 'PATCH', 'DELETE' ),
-							'description' => 'POST to create, POST or PATCH to update, DELETE to remove.',
-						),
-						'route'  => array(
-							'type'        => 'string',
-							'description' => 'A capability path, for example /wp/v2/posts or /wp/v2/posts/12.',
-						),
-						'params' => array(
-							'type'        => 'object',
-							'description' => 'The fields to send.',
-						),
-					),
-					'required'   => array( 'method', 'route' ),
-				),
-			),
-			array(
-				'name'         => 'open_admin_page',
-				'description'  => 'Offer the person a link to a page of their admin panel. Use this as the alternative route whenever something cannot be done here, so "I cannot do that" is never the whole answer.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => array(
-						'path'  => array(
-							'type'        => 'string',
-							'description' => 'An admin path, for example options-general.php or edit.php?post_type=page.',
-						),
-						'label' => array(
-							'type'        => 'string',
-							'description' => 'Short label for the link, in the language of the conversation.',
-						),
-					),
-					'required'   => array( 'path', 'label' ),
-				),
-			),
+			$this->call_api_tool( $mode ),
 			array(
 				'name'         => 'memory_list',
 				'description'  => 'List every persistent memory row stored for this site (id, content, timestamps). Use when you need the full set or after writing/deleting.',
@@ -118,80 +66,105 @@ final class ToolCatalog {
 					'properties' => (object) array(),
 				),
 			),
-			array(
-				'name'         => 'memory_write',
-				'description'  => 'Create or update a persistent memory note. Omit id to create; include id to update an existing row. Keep content short and factual.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => array(
-						'content' => array(
-							'type'        => 'string',
-							'description' => 'The note to remember.',
-						),
-						'id'      => array(
-							'type'        => 'string',
-							'description' => 'Existing memory id when updating.',
-						),
+		);
+
+		if ( 'ask' === $mode ) {
+			return $tools;
+		}
+
+		$tools[] = array(
+			'name'         => 'memory_write',
+			'description'  => 'Create or update a persistent memory note. Omit id to create; include id to update an existing row. Keep content short and factual.',
+			'input_schema' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'content' => array(
+						'type'        => 'string',
+						'description' => 'The note to remember.',
 					),
-					'required'   => array( 'content' ),
-				),
-			),
-			array(
-				'name'         => 'memory_delete',
-				'description'  => 'Delete one persistent memory row by id.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => array(
-						'id' => array(
-							'type'        => 'string',
-							'description' => 'Memory id to delete.',
-						),
-					),
-					'required'   => array( 'id' ),
-				),
-			),
-			array(
-				'name'         => 'read_current_page',
-				'description'  => 'Read the visible text of the admin page where the assistant panel is open (page title, headings, main content). Never changes anything.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => (object) array(),
-				),
-			),
-			array(
-				'name'         => 'highlight_on_page',
-				'description'  => 'Visually highlight an element on the current admin page so the person can see it. Provide a CSS selector and/or visible text to match.',
-				'input_schema' => array(
-					'type'       => 'object',
-					'properties' => array(
-						'selector' => array(
-							'type'        => 'string',
-							'description' => 'CSS selector for the target element, for example "#title" or ".wp-heading-inline".',
-						),
-						'text'     => array(
-							'type'        => 'string',
-							'description' => 'Visible text contained by the element to highlight.',
-						),
+					'id'      => array(
+						'type'        => 'string',
+						'description' => 'Existing memory id when updating.',
 					),
 				),
+				'required'   => array( 'content' ),
 			),
 		);
+
+		$tools[] = array(
+			'name'         => 'memory_delete',
+			'description'  => 'Delete one persistent memory row by id.',
+			'input_schema' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'id' => array(
+						'type'        => 'string',
+						'description' => 'Memory id to delete.',
+					),
+				),
+				'required'   => array( 'id' ),
+			),
+		);
+
+		return $tools;
 	}
 
 	/**
-	 * Tool names that only read.
+	 * call_api definition — full methods in Agent, GET-only in Ask.
 	 *
-	 * @return string[]
+	 * @param string $mode agent|ask.
+	 *
+	 * @return array<string, mixed>
 	 */
-	public function read_only(): array {
+	private function call_api_tool( string $mode ): array {
+		if ( 'ask' === $mode ) {
+			return array(
+				'name'         => 'call_api',
+				'description'  => 'Read any site REST API discovered via list_capabilities. Ask mode is read-only: method must be GET. Pass the route path and any query parameters that route needs. Returns the API response. Never claim site data you have not read.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'method' => array(
+							'type'        => 'string',
+							'enum'        => array( 'GET' ),
+							'description' => 'HTTP method — GET only in Ask mode.',
+						),
+						'route'  => array(
+							'type'        => 'string',
+							'description' => 'A REST path from list_capabilities, for example /wp/v2/posts or /wp/v2/posts/12.',
+						),
+						'params' => array(
+							'type'        => 'object',
+							'description' => 'Query parameters matching what describe_capability shows for that route.',
+						),
+					),
+					'required'   => array( 'method', 'route' ),
+				),
+			);
+		}
+
 		return array(
-			'list_capabilities',
-			'describe_capability',
-			'read_site',
-			'open_admin_page',
-			'memory_list',
-			'read_current_page',
-			'highlight_on_page',
+			'name'         => 'call_api',
+			'description'  => 'Call any site REST API discovered via list_capabilities. Pass the HTTP method, the route path, and any query/body parameters that route needs. Returns the API response. Use GET to read; POST/PUT/PATCH/DELETE to create, update, or remove. The server may require confirmation for risky changes — when it does, tell the person plainly what will happen and wait. Never claim a change succeeded before this tool reports it.',
+			'input_schema' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'method' => array(
+						'type'        => 'string',
+						'enum'        => array( 'GET', 'POST', 'PUT', 'PATCH', 'DELETE' ),
+						'description' => 'HTTP method for the route.',
+					),
+					'route'  => array(
+						'type'        => 'string',
+						'description' => 'A REST path from list_capabilities, for example /wp/v2/posts or /wp/v2/posts/12.',
+					),
+					'params' => array(
+						'type'        => 'object',
+						'description' => 'Query parameters (for GET) or body fields (for writes), matching what describe_capability shows for that route.',
+					),
+				),
+				'required'   => array( 'method', 'route' ),
+			),
 		);
 	}
 }

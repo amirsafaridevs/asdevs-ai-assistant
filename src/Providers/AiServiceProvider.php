@@ -18,6 +18,7 @@ use ASDevs\AIAssistant\Context\SiteSnapshot;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
 use ASDevs\AIAssistant\Memory\MemoryStore;
+use ASDevs\AIAssistant\Skills\SkillStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -38,7 +39,8 @@ final class AiServiceProvider extends ServiceProvider {
 			SystemPrompt::class,
 			static fn( Container $container ) => new SystemPrompt(
 				$container->get( SiteSnapshot::class ),
-				$container->get( MemoryStore::class )
+				$container->get( MemoryStore::class ),
+				$container->get( SkillStore::class )
 			)
 		);
 

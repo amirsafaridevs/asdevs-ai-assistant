@@ -1,6 +1,6 @@
 <?php
 /**
- * Conversation history endpoints.
+ * Active conversation endpoints.
  *
  * @package ASDevs\AIAssistant
  */
@@ -18,12 +18,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Lets people look back at their conversations and delete them for good.
+ * Saves and restores the one active chat for the signed-in person.
  */
 final class ConversationController extends Controller {
 
 	/**
-	 * Conversation history.
+	 * Active conversation store.
 	 *
 	 * @var ConversationStore
 	 */
@@ -32,7 +32,7 @@ final class ConversationController extends Controller {
 	/**
 	 * Constructor.
 	 *
-	 * @param ConversationStore $store Conversation history.
+	 * @param ConversationStore $store Active conversation store.
 	 */
 	public function __construct( ConversationStore $store ) {
 		$this->store = $store;
@@ -44,17 +44,17 @@ final class ConversationController extends Controller {
 	public function register_routes(): void {
 		register_rest_route(
 			self::NAMESPACE,
-			'/conversations',
+			'/conversation',
 			array(
 				array(
 					'methods'             => 'GET',
-					'callback'            => array( $this, 'index' ),
-					'permission_callback' => array( $this, 'check_permission' ),
+					'callback'            => array( $this, 'show' ),
+					'permission_callback' => array( $this, 'check_terms_permission' ),
 				),
 				array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'save' ),
-					'permission_callback' => array( $this, 'check_permission' ),
+					'permission_callback' => array( $this, 'check_terms_permission' ),
 					'args'                => array(
 						'id'         => array(
 							'type'              => 'string',
@@ -75,43 +75,17 @@ final class ConversationController extends Controller {
 				array(
 					'methods'             => 'DELETE',
 					'callback'            => array( $this, 'clear' ),
-					'permission_callback' => array( $this, 'check_permission' ),
-				),
-			)
-		);
-
-		register_rest_route(
-			self::NAMESPACE,
-			'/conversations/(?P<id>[a-z0-9_\-]+)',
-			array(
-				array(
-					'methods'             => 'GET',
-					'callback'            => array( $this, 'show' ),
-					'permission_callback' => array( $this, 'check_permission' ),
-				),
-				array(
-					'methods'             => 'DELETE',
-					'callback'            => array( $this, 'delete' ),
-					'permission_callback' => array( $this, 'check_permission' ),
+					'permission_callback' => array( $this, 'check_terms_permission' ),
 				),
 			)
 		);
 	}
 
 	/**
-	 * List conversations.
+	 * Show the active conversation.
 	 */
-	public function index(): WP_REST_Response {
-		return new WP_REST_Response( $this->store->index( get_current_user_id() ) );
-	}
-
-	/**
-	 * Show one conversation.
-	 *
-	 * @param WP_REST_Request $request The request.
-	 */
-	public function show( WP_REST_Request $request ): WP_REST_Response {
-		$conversation = $this->store->get( get_current_user_id(), sanitize_key( (string) $request->get_param( 'id' ) ) );
+	public function show(): WP_REST_Response {
+		$conversation = $this->store->get( get_current_user_id() );
 
 		if ( null === $conversation ) {
 			return new WP_REST_Response( array( 'found' => false ), 404 );
@@ -121,16 +95,21 @@ final class ConversationController extends Controller {
 	}
 
 	/**
-	 * Create or update a conversation.
+	 * Replace the active conversation.
 	 *
 	 * @param WP_REST_Request $request The request.
 	 */
 	public function save( WP_REST_Request $request ): WP_REST_Response {
+		$pending = $request->get_param( 'pending' );
+		$choices = $request->get_param( 'choices' );
+
 		$this->store->save(
 			get_current_user_id(),
 			(string) $request->get_param( 'id' ),
 			(string) $request->get_param( 'title' ),
 			$this->array_param( $request, 'messages' ),
+			is_array( $pending ) ? $pending : null,
+			is_array( $choices ) ? $choices : null,
 			(bool) $request->get_param( 'unfinished' )
 		);
 
@@ -138,18 +117,7 @@ final class ConversationController extends Controller {
 	}
 
 	/**
-	 * Delete one conversation.
-	 *
-	 * @param WP_REST_Request $request The request.
-	 */
-	public function delete( WP_REST_Request $request ): WP_REST_Response {
-		$this->store->delete( get_current_user_id(), sanitize_key( (string) $request->get_param( 'id' ) ) );
-
-		return new WP_REST_Response( array( 'deleted' => true ) );
-	}
-
-	/**
-	 * Delete everything for this user.
+	 * Delete the active conversation for this user.
 	 */
 	public function clear(): WP_REST_Response {
 		$this->store->clear( get_current_user_id() );

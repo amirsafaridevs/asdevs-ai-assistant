@@ -19,6 +19,7 @@ use WordPress\AiClient\Messages\DTO\MessagePart;
 use WordPress\AiClient\Messages\Enums\MessagePartChannelEnum;
 use WordPress\AiClient\Messages\Enums\MessageRoleEnum;
 use WordPress\AiClient\Providers\Http\DTO\ApiKeyRequestAuthentication;
+use WordPress\AiClient\Providers\Models\DTO\ModelMetadata;
 use WordPress\AiClient\Tools\DTO\FunctionCall;
 use WordPress\AiClient\Tools\DTO\FunctionDeclaration;
 use WordPress\AiClient\Tools\DTO\FunctionResponse;
@@ -76,16 +77,49 @@ final class WordPressConnectorProvider implements AiProvider {
 	}
 
 	/**
-	 * Models are chosen by the WordPress AI Client for the selected connector.
+	 * Text-generation models from the WordPress AI Client for this connector.
+	 *
+	 * Keys are provider model ids; values are display names. Empty when the
+	 * connector is not ready or the directory cannot be listed.
 	 *
 	 * @return array<string, string>
 	 */
 	public function models(): array {
-		return array();
+		if ( ! $this->is_configured() || ! class_exists( AiClient::class ) ) {
+			return array();
+		}
+
+		try {
+			$registry  = AiClient::defaultRegistry();
+			$class     = $registry->getProviderClassName( $this->id );
+			$directory = $class::modelMetadataDirectory();
+			$listed    = $directory->listModelMetadata();
+		} catch ( \Throwable ) {
+			return array();
+		}
+
+		$models = array();
+
+		foreach ( $listed as $meta ) {
+			if ( ! $meta instanceof ModelMetadata || ! $this->is_text_generation_model( $meta ) ) {
+				continue;
+			}
+
+			$id   = $meta->getId();
+			$name = trim( $meta->getName() );
+
+			if ( '' === $id ) {
+				continue;
+			}
+
+			$models[ $id ] = '' !== $name ? $name : $id;
+		}
+
+		return $models;
 	}
 
 	/**
-	 * No fixed default — the AI Client picks a suitable model.
+	 * No fixed default — empty means the AI Client picks a suitable model.
 	 */
 	public function default_model(): string {
 		return '';
@@ -98,6 +132,24 @@ final class WordPressConnectorProvider implements AiProvider {
 	 */
 	public function reasoning_models(): array {
 		return array();
+	}
+
+	/**
+	 * Whether a model can power assistant chat (text in / text out).
+	 *
+	 * Image, speech, embedding, and similar specialized models are excluded so
+	 * the composer picker stays usable across every provider.
+	 *
+	 * @param ModelMetadata $meta Model metadata from the AI Client.
+	 */
+	private function is_text_generation_model( ModelMetadata $meta ): bool {
+		foreach ( $meta->getSupportedCapabilities() as $capability ) {
+			if ( $capability->isTextGeneration() ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -203,6 +255,14 @@ final class WordPressConnectorProvider implements AiProvider {
 			->using_provider( $this->id )
 			->using_system_instruction( $request->system() )
 			->using_max_tokens( 16000 );
+
+		$model = $request->model();
+
+		if ( '' !== $model ) {
+			// Prefer this provider's model id; if it cannot meet prompt
+			// requirements the AI Client falls back to another candidate.
+			$builder = $builder->using_model_preference( array( $this->id, $model ) );
+		}
 
 		$declarations = $this->function_declarations( $request->tools() );
 

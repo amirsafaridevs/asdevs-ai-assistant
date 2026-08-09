@@ -35,6 +35,11 @@ final class CapabilityMap {
 	private const TTL = 6 * HOUR_IN_SECONDS;
 
 	/**
+	 * Bump when the map shape changes so stale transients are ignored.
+	 */
+	private const MAP_VERSION = 2;
+
+	/**
 	 * Routes that describe the API itself rather than a capability.
 	 *
 	 * @var string[]
@@ -107,27 +112,32 @@ final class CapabilityMap {
 			return null;
 		}
 
+		$handlers  = $routes[ $match ];
+		$schema    = $this->schema_from_handlers( $handlers );
 		$described = array(
 			'route'   => $this->normalize( $match ),
 			'methods' => array(),
 		);
 
-		foreach ( $routes[ $match ] as $handler ) {
+		if ( is_array( $schema ) ) {
+			if ( ! empty( $schema['title'] ) ) {
+				$described['title'] = (string) $schema['title'];
+			}
+			if ( ! empty( $schema['description'] ) ) {
+				$described['description'] = (string) $schema['description'];
+			}
+		}
+
+		foreach ( $handlers as $handler ) {
 			$methods = array_keys( array_filter( $handler['methods'] ) );
 			$args    = array();
 
 			foreach ( (array) ( $handler['args'] ?? array() ) as $name => $definition ) {
-				$args[] = array_filter(
-					array(
-						'name'        => (string) $name,
-						'type'        => $definition['type'] ?? null,
-						'required'    => ! empty( $definition['required'] ),
-						'description' => isset( $definition['description'] ) ? (string) $definition['description'] : null,
-						'enum'        => isset( $definition['enum'] ) ? array_values( (array) $definition['enum'] ) : null,
-						'default'     => $definition['default'] ?? null,
-					),
-					static fn( $value ) => null !== $value && false !== $value
-				);
+				if ( ! is_array( $definition ) ) {
+					continue;
+				}
+
+				$args[] = $this->compact_arg( (string) $name, $definition );
 			}
 
 			foreach ( $methods as $method ) {
@@ -174,7 +184,7 @@ final class CapabilityMap {
 			$base = $this->collection_base( $route );
 
 			if ( ! isset( $collections[ $base ] ) ) {
-				$collections[ $base ] = array(
+				$entry = array(
 					'base'      => $base,
 					'namespace' => $this->namespace_of( $base ),
 					'label'     => $this->label_for( $base ),
@@ -183,6 +193,13 @@ final class CapabilityMap {
 					'reads'     => false,
 					'writes'    => false,
 				);
+
+				$description = $this->description_for( $base, $routes );
+				if ( '' !== $description ) {
+					$entry['description'] = $description;
+				}
+
+				$collections[ $base ] = $entry;
 			}
 
 			$methods = array();
@@ -313,9 +330,156 @@ final class CapabilityMap {
 			}
 		}
 
+		$schema = $this->schema_from_handlers( rest_get_server()->get_routes()[ $base ] ?? array() );
+		if ( is_array( $schema ) && ! empty( $schema['title'] ) ) {
+			return ucwords( str_replace( array( '-', '_' ), ' ', (string) $schema['title'] ) );
+		}
+
 		$slug = (string) preg_replace( '#^.*/#', '', $base );
 
 		return ucwords( str_replace( array( '-', '_' ), ' ', $slug ) );
+	}
+
+	/**
+	 * Short plain-language description of what a collection is for.
+	 *
+	 * Drawn from WordPress registry text or the route's own REST schema so the
+	 * model can triage capabilities without describing every route first.
+	 *
+	 * @param string                      $base   Collection base.
+	 * @param array<string, array<mixed>> $routes Registered routes.
+	 */
+	private function description_for( string $base, array $routes ): string {
+		foreach ( get_post_types( array( 'show_in_rest' => true ), 'objects' ) as $post_type ) {
+			if ( $this->registry_base( $post_type->rest_namespace, $post_type->rest_base, $post_type->name ) === $base ) {
+				$description = trim( (string) $post_type->description );
+				if ( '' !== $description ) {
+					return $description;
+				}
+			}
+		}
+
+		foreach ( get_taxonomies( array( 'show_in_rest' => true ), 'objects' ) as $taxonomy ) {
+			if ( $this->registry_base( $taxonomy->rest_namespace, $taxonomy->rest_base, $taxonomy->name ) === $base ) {
+				$description = trim( (string) $taxonomy->description );
+				if ( '' !== $description ) {
+					return $description;
+				}
+			}
+		}
+
+		$schema = $this->schema_from_handlers( $routes[ $base ] ?? array() );
+		if ( is_array( $schema ) && ! empty( $schema['description'] ) ) {
+			return trim( (string) $schema['description'] );
+		}
+
+		return '';
+	}
+
+	/**
+	 * Resolve the JSON schema attached to route handlers, if any.
+	 *
+	 * @param array<int, array<string, mixed>> $handlers Route handlers.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function schema_from_handlers( array $handlers ): ?array {
+		foreach ( $handlers as $handler ) {
+			if ( empty( $handler['schema'] ) ) {
+				continue;
+			}
+
+			$schema = $handler['schema'];
+			if ( is_callable( $schema ) ) {
+				$schema = call_user_func( $schema );
+			}
+
+			if ( is_array( $schema ) ) {
+				return $schema;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Compact one REST arg definition for the model.
+	 *
+	 * @param string               $name       Argument name.
+	 * @param array<string, mixed> $definition Raw REST arg schema.
+	 * @param int                  $depth      Nesting depth for items/properties.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function compact_arg( string $name, array $definition, int $depth = 0 ): array {
+		$arg = array(
+			'name' => $name,
+		);
+
+		$node = $this->compact_schema_node( $definition, $depth );
+		foreach ( $node as $key => $value ) {
+			$arg[ $key ] = $value;
+		}
+
+		if ( ! empty( $definition['required'] ) ) {
+			$arg['required'] = true;
+		}
+
+		return $arg;
+	}
+
+	/**
+	 * Compact a schema node (arg, items, or property) without drowning the model.
+	 *
+	 * @param array<string, mixed> $definition Raw schema fragment.
+	 * @param int                  $depth      Nesting depth.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function compact_schema_node( array $definition, int $depth = 0 ): array {
+		$node = array_filter(
+			array(
+				'type'        => $definition['type'] ?? null,
+				'description' => isset( $definition['description'] ) ? (string) $definition['description'] : null,
+				'enum'        => isset( $definition['enum'] ) ? array_values( (array) $definition['enum'] ) : null,
+				'default'     => $definition['default'] ?? null,
+				'minimum'     => $definition['minimum'] ?? null,
+				'maximum'     => $definition['maximum'] ?? null,
+			),
+			static fn( $value ) => null !== $value && false !== $value
+		);
+
+		if ( $depth >= 2 ) {
+			return $node;
+		}
+
+		if ( isset( $definition['items'] ) && is_array( $definition['items'] ) ) {
+			$items = $this->compact_schema_node( $definition['items'], $depth + 1 );
+			if ( array() !== $items ) {
+				$node['items'] = $items;
+			}
+		}
+
+		if ( isset( $definition['properties'] ) && is_array( $definition['properties'] ) ) {
+			$properties = array();
+
+			foreach ( $definition['properties'] as $property_name => $property ) {
+				if ( ! is_array( $property ) ) {
+					continue;
+				}
+
+				$compact = $this->compact_schema_node( $property, $depth + 1 );
+				if ( array() !== $compact ) {
+					$properties[ (string) $property_name ] = $compact;
+				}
+			}
+
+			if ( array() !== $properties ) {
+				$node['properties'] = $properties;
+			}
+		}
+
+		return $node;
 	}
 
 	/**
@@ -387,6 +551,7 @@ final class CapabilityMap {
 	 */
 	private function cache_key(): string {
 		$state = array(
+			self::MAP_VERSION,
 			get_current_user_id(),
 			wp_json_encode( wp_roles()->get_names() ),
 			wp_json_encode( get_option( 'active_plugins', array() ) ),

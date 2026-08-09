@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { __, boot } from '../api';
-import { cancel } from '../assistant';
+import { cancel, show } from '../assistant';
+import type { ModelInfo, Skill } from '../types';
 
 export type AgentMode = 'agent' | 'ask';
-export type ModelChoice = 'auto';
 
 export interface ComposerAttachment {
   id: string;
@@ -21,12 +21,19 @@ export interface ComposerAttachment {
 const props = defineProps<{
   modelValue: string;
   busy: boolean;
+  skills?: Skill[];
+  activeSkills?: string[];
+  models?: ModelInfo[];
+  model?: string;
 }>();
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void;
-  (event: 'submit', payload: { text: string; attachments: ComposerAttachment[]; agent: AgentMode; model: ModelChoice }): void;
+  (event: 'submit', payload: { text: string; attachments: ComposerAttachment[]; agent: AgentMode; model: string }): void;
   (event: 'focus-ready', el: HTMLTextAreaElement | null): void;
+  (event: 'toggle-skill', slug: string): void;
+  (event: 'clear-skill', slug: string): void;
+  (event: 'choose-model', model: string): void;
 }>();
 
 const input = ref<HTMLTextAreaElement | null>(null);
@@ -35,8 +42,10 @@ const root = ref<HTMLElement | null>(null);
 
 const attachments = ref<ComposerAttachment[]>([]);
 const agent = ref<AgentMode>('agent');
-const model = ref<ModelChoice>('auto');
 const agentOpen = ref(false);
+const modelOpen = ref(false);
+const skillsOpen = ref(false);
+const slashIndex = ref(0);
 const listening = ref(false);
 const voiceSupported = ref(false);
 const voiceError = ref('');
@@ -47,6 +56,49 @@ let baseDraft = '';
 const LINE_HEIGHT = 22;
 const MAX_LINES = 4;
 
+const skills = computed(() => props.skills ?? []);
+const activeSkills = computed(() => props.activeSkills ?? []);
+const models = computed(() => props.models ?? []);
+const selectedModel = computed(() => props.model ?? 'auto');
+
+const modelLabel = computed(() => {
+  if (selectedModel.value === 'auto') {
+    return __('Auto');
+  }
+
+  const match = models.value.find((item) => item.id === selectedModel.value);
+
+  return match?.label || selectedModel.value;
+});
+
+const canPickModel = computed(() => models.value.length > 0);
+
+const activeSkillItems = computed(() =>
+  activeSkills.value
+    .map((slug) => skills.value.find((item) => item.slug === slug))
+    .filter((item): item is Skill => Boolean(item))
+);
+
+const slashQuery = computed(() => {
+  const match = props.modelValue.match(/(?:^|\s)\/([a-z0-9-]*)$/i);
+
+  return match ? match[1].toLowerCase() : null;
+});
+
+const slashMatches = computed(() => {
+  const query = slashQuery.value;
+
+  if (query === null) {
+    return [] as Skill[];
+  }
+
+  return skills.value
+    .filter((item) => item.slug.startsWith(query) || item.title.toLowerCase().includes(query))
+    .slice(0, 8);
+});
+
+const showSlash = computed(() => slashMatches.value.length > 0);
+
 const canSend = computed(
   () => props.modelValue.trim().length > 0 || attachments.value.some((item) => item.status !== 'failed')
 );
@@ -56,6 +108,7 @@ const agentLabel = computed(() => (agent.value === 'agent' ? __('Agent') : __('A
 watch(
   () => props.modelValue,
   async () => {
+    slashIndex.value = 0;
     await nextTick();
     resize();
   }
@@ -81,6 +134,8 @@ onBeforeUnmount(() => {
 function onDocPointer(event: PointerEvent): void {
   if (!root.value?.contains(event.target as Node)) {
     agentOpen.value = false;
+    modelOpen.value = false;
+    skillsOpen.value = false;
   }
 }
 
@@ -98,10 +153,78 @@ function resize(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (showSlash.value) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      slashIndex.value = (slashIndex.value + 1) % slashMatches.value.length;
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      slashIndex.value = (slashIndex.value - 1 + slashMatches.value.length) % slashMatches.value.length;
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      pickSlash(slashMatches.value[slashIndex.value]);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      emit('update:modelValue', `${props.modelValue} `);
+      return;
+    }
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     void submit();
   }
+}
+
+function pickSlash(skill: Skill | undefined): void {
+  if (!skill) {
+    return;
+  }
+
+  if (!activeSkills.value.includes(skill.slug)) {
+    emit('toggle-skill', skill.slug);
+  }
+
+  const next = props.modelValue
+    .replace(/(?:^|\s)\/[a-z0-9-]*$/i, (match) => (match.startsWith(' ') ? ' ' : ''))
+    .trimStart();
+  emit('update:modelValue', next);
+  void nextTick(() => input.value?.focus());
+}
+
+function chooseSkill(skill: Skill): void {
+  emit('toggle-skill', skill.slug);
+  skillsOpen.value = false;
+}
+
+function openSkillsMenu(): void {
+  agentOpen.value = false;
+  modelOpen.value = false;
+  skillsOpen.value = !skillsOpen.value;
+}
+
+function toggleModelMenu(): void {
+  if (!canPickModel.value) {
+    return;
+  }
+
+  modelOpen.value = !modelOpen.value;
+  agentOpen.value = false;
+  skillsOpen.value = false;
+}
+
+function manageSkills(): void {
+  skillsOpen.value = false;
+  show('skills');
 }
 
 function pickFiles(): void {
@@ -329,6 +452,8 @@ async function submit(): Promise<void> {
 
   stopVoice();
   agentOpen.value = false;
+  modelOpen.value = false;
+  skillsOpen.value = false;
 
   const text = props.modelValue;
   const files = await prepareAttachments();
@@ -347,7 +472,7 @@ async function submit(): Promise<void> {
     text: payload.text,
     attachments: payload.attachments,
     agent: agent.value,
-    model: model.value,
+    model: selectedModel.value,
   });
 
   emit('update:modelValue', '');
@@ -442,6 +567,11 @@ function chooseAgent(value: AgentMode): void {
   agentOpen.value = false;
 }
 
+function chooseModel(value: string): void {
+  emit('choose-model', value);
+  modelOpen.value = false;
+}
+
 defineExpose({
   focus: () => input.value?.focus(),
   el: input,
@@ -450,6 +580,23 @@ defineExpose({
 
 <template>
   <form ref="root" class="asdevs-ai-composer" @submit.prevent="submit()">
+    <div v-if="activeSkillItems.length" class="asdevs-ai-composer__skills">
+      <button
+        v-for="skill in activeSkillItems"
+        :key="skill.slug"
+        type="button"
+        class="asdevs-ai-skill-chip"
+        :title="__('Remove skill')"
+        @click="emit('clear-skill', skill.slug)"
+      >
+        <span class="asdevs-ai-skill-chip__slash">/{{ skill.slug }}</span>
+        <span class="asdevs-ai-skill-chip__name">{{ skill.title }}</span>
+        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false">
+          <path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+
     <div v-if="attachments.length" class="asdevs-ai-composer__files">
       <div v-for="item in attachments" :key="item.id" class="asdevs-ai-file" :class="`is-${item.status}`">
         <img v-if="item.previewUrl" :src="item.previewUrl" alt="" class="asdevs-ai-file__thumb" />
@@ -474,27 +621,77 @@ defineExpose({
       </div>
     </div>
 
-    <label class="screen-reader-text" for="asdevs-ai-input">{{ __('Message the assistant') }}</label>
-    <textarea
-      id="asdevs-ai-input"
-      ref="input"
-      class="asdevs-ai-composer__input"
-      rows="1"
-      :value="modelValue"
-      :placeholder="__('Tell me what you need')"
-      @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
-      @keydown="onKeydown"
-    ></textarea>
+    <div class="asdevs-ai-composer__input-wrap">
+      <label class="screen-reader-text" for="asdevs-ai-input">{{ __('Message the assistant') }}</label>
+      <textarea
+        id="asdevs-ai-input"
+        ref="input"
+        class="asdevs-ai-composer__input"
+        rows="1"
+        :value="modelValue"
+        :placeholder="__('Tell me what you need')"
+        @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+        @keydown="onKeydown"
+      ></textarea>
+
+      <div v-if="showSlash" class="asdevs-ai-slash" role="listbox" :aria-label="__('Skills')">
+        <button
+          v-for="(skill, index) in slashMatches"
+          :key="skill.id"
+          type="button"
+          class="asdevs-ai-slash__item"
+          :class="{ 'is-active': index === slashIndex }"
+          role="option"
+          :aria-selected="index === slashIndex"
+          @mousedown.prevent="pickSlash(skill)"
+        >
+          <code>/{{ skill.slug }}</code>
+          <span>{{ skill.title }}</span>
+        </button>
+      </div>
+    </div>
 
     <div class="asdevs-ai-composer__bar">
       <div class="asdevs-ai-composer__left">
         <div class="asdevs-ai-menu">
           <button
             type="button"
+            class="asdevs-ai-pill asdevs-ai-pill--plus"
+            :aria-expanded="skillsOpen"
+            :aria-label="__('Choose skills')"
+            :title="__('Skills')"
+            @click="openSkillsMenu()"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            </svg>
+          </button>
+          <div v-if="skillsOpen" class="asdevs-ai-menu__list asdevs-ai-menu__list--skills" role="listbox">
+            <p v-if="skills.length === 0" class="asdevs-ai-menu__empty">{{ __('No skills yet.') }}</p>
+            <button
+              v-for="skill in skills"
+              :key="skill.id"
+              type="button"
+              class="asdevs-ai-menu__item asdevs-ai-menu__item--skill"
+              :class="{ 'is-active': activeSkills.includes(skill.slug) }"
+              @click="chooseSkill(skill)"
+            >
+              <span class="asdevs-ai-menu__item-title">{{ skill.title }}</span>
+              <code class="asdevs-ai-menu__item-slug">/{{ skill.slug }}</code>
+            </button>
+            <button type="button" class="asdevs-ai-menu__item asdevs-ai-menu__item--manage" @click="manageSkills()">
+              {{ __('Manage skills…') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="asdevs-ai-menu">
+          <button
+            type="button"
             class="asdevs-ai-pill"
             :aria-expanded="agentOpen"
             :aria-label="__('Choose mode')"
-            @click="agentOpen = !agentOpen"
+            @click="agentOpen = !agentOpen; modelOpen = false; skillsOpen = false"
           >
             <span class="asdevs-ai-pill__glyph" aria-hidden="true">∞</span>
             <span>{{ agentLabel }}</span>
@@ -512,9 +709,45 @@ defineExpose({
           </div>
         </div>
 
-        <span class="asdevs-ai-pill asdevs-ai-pill--ghost asdevs-ai-pill--static">
-          {{ __('Auto') }}
-        </span>
+        <div class="asdevs-ai-menu">
+          <button
+            type="button"
+            class="asdevs-ai-pill asdevs-ai-pill--ghost"
+            :class="{ 'asdevs-ai-pill--static': !canPickModel }"
+            :aria-expanded="canPickModel ? modelOpen : undefined"
+            :aria-label="__('Choose model')"
+            :disabled="!canPickModel"
+            @click="toggleModelMenu()"
+          >
+            <span class="asdevs-ai-pill__model" :title="modelLabel">{{ modelLabel }}</span>
+            <svg v-if="canPickModel" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false">
+              <path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <div v-if="modelOpen && canPickModel" class="asdevs-ai-menu__list asdevs-ai-menu__list--models" role="listbox">
+            <button
+              type="button"
+              class="asdevs-ai-menu__item asdevs-ai-menu__item--model"
+              :class="{ 'is-active': selectedModel === 'auto' }"
+              @click="chooseModel('auto')"
+            >
+              <span class="asdevs-ai-menu__item-title">{{ __('Auto') }}</span>
+              <span class="asdevs-ai-menu__item-meta">{{ __('Let the connector choose') }}</span>
+            </button>
+            <button
+              v-for="item in models"
+              :key="item.id"
+              type="button"
+              class="asdevs-ai-menu__item asdevs-ai-menu__item--model"
+              :class="{ 'is-active': selectedModel === item.id }"
+              :title="item.id"
+              @click="chooseModel(item.id)"
+            >
+              <span class="asdevs-ai-menu__item-title">{{ item.label }}</span>
+              <code v-if="item.label !== item.id" class="asdevs-ai-menu__item-slug">{{ item.id }}</code>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="asdevs-ai-composer__right">
