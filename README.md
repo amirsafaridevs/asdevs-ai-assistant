@@ -266,7 +266,7 @@ More questions are answered in [`readme.txt`](readme.txt) for the WordPress.org 
 ```text
 asdevs-ai-assistant/
 ├── asdevs-ai-assistant.php   # Bootstrap only
-├── src/                      # PHP: discovery, AI, security, REST, skills, …
+├── src/                      # PHP: Services/ (domain logic), Http/Controllers/, Providers/, Core/
 ├── frontend/                 # Vue + TypeScript UI
 ├── assets/dist/              # Built front-end
 ├── tests/                    # PHPUnit (risk policy, never-rules, …)
