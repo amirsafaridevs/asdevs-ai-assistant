@@ -7,9 +7,9 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Discovery\CapabilityMap;
+use ASDevs\AIAssistant\Services\Discovery\CapabilityMap;
 use WP_REST_Request;
 use WP_REST_Response;
 

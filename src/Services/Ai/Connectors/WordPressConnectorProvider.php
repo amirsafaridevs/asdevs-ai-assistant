@@ -7,11 +7,11 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Ai\Providers;
+namespace ASDevs\AIAssistant\Services\Ai\Connectors;
 
-use ASDevs\AIAssistant\Ai\AiProvider;
-use ASDevs\AIAssistant\Ai\AiUnavailable;
-use ASDevs\AIAssistant\Ai\ChatRequest;
+use ASDevs\AIAssistant\Services\Ai\AiProvider;
+use ASDevs\AIAssistant\Services\Ai\AiUnavailable;
+use ASDevs\AIAssistant\Services\Ai\ChatRequest;
 use WordPress\AiClient\AiClient;
 use WordPress\AiClient\Files\DTO\File;
 use WordPress\AiClient\Messages\DTO\Message;

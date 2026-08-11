@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Legal;
+namespace ASDevs\AIAssistant\Services\Legal;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

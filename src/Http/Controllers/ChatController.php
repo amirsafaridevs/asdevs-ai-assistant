@@ -7,15 +7,15 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Ai\AiUnavailable;
-use ASDevs\AIAssistant\Ai\AiProvider;
-use ASDevs\AIAssistant\Ai\ChatRequest;
-use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Ai\SystemPrompt;
-use ASDevs\AIAssistant\Ai\ToolCatalog;
-use ASDevs\AIAssistant\Skills\SkillStore;
+use ASDevs\AIAssistant\Services\Ai\AiUnavailable;
+use ASDevs\AIAssistant\Services\Ai\AiProvider;
+use ASDevs\AIAssistant\Services\Ai\ChatRequest;
+use ASDevs\AIAssistant\Services\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Services\Ai\SystemPrompt;
+use ASDevs\AIAssistant\Services\Ai\ToolCatalog;
+use ASDevs\AIAssistant\Services\Skills\SkillStore;
 use WP_Error;
 use WP_REST_Request;
 

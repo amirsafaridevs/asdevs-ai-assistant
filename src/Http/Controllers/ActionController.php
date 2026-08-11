@@ -7,10 +7,10 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Execution\ActionExecutor;
-use ASDevs\AIAssistant\Security\ActionRequest;
+use ASDevs\AIAssistant\Services\Execution\ActionExecutor;
+use ASDevs\AIAssistant\Services\Security\ActionRequest;
 use WP_REST_Request;
 use WP_REST_Response;
 

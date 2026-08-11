@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Discovery;
+namespace ASDevs\AIAssistant\Services\Discovery;
 
 use WP_REST_Request;
 

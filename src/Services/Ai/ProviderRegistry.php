@@ -7,9 +7,9 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Ai;
+namespace ASDevs\AIAssistant\Services\Ai;
 
-use ASDevs\AIAssistant\Ai\Providers\WordPressConnectorProvider;
+use ASDevs\AIAssistant\Services\Ai\Connectors\WordPressConnectorProvider;
 use WordPress\AiClient\AiClient;
 
 if ( ! defined( 'ABSPATH' ) ) {

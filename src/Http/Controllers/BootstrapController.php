@@ -7,13 +7,13 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Context\SiteSnapshot;
-use ASDevs\AIAssistant\Context\StartSuggestions;
-use ASDevs\AIAssistant\Conversations\ConversationStore;
-use ASDevs\AIAssistant\Legal\Terms;
+use ASDevs\AIAssistant\Services\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Services\Context\SiteSnapshot;
+use ASDevs\AIAssistant\Services\Context\StartSuggestions;
+use ASDevs\AIAssistant\Services\Conversations\ConversationStore;
+use ASDevs\AIAssistant\Services\Legal\Terms;
 use WP_REST_Response;
 
 if ( ! defined( 'ABSPATH' ) ) {

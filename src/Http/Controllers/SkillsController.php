@@ -7,9 +7,9 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Skills\SkillStore;
+use ASDevs\AIAssistant\Services\Skills\SkillStore;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;

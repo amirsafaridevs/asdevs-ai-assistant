@@ -9,16 +9,16 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Ai\AiProvider;
-use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Ai\Settings;
-use ASDevs\AIAssistant\Ai\SystemPrompt;
-use ASDevs\AIAssistant\Ai\ToolCatalog;
-use ASDevs\AIAssistant\Context\SiteSnapshot;
+use ASDevs\AIAssistant\Services\Ai\AiProvider;
+use ASDevs\AIAssistant\Services\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Services\Ai\Settings;
+use ASDevs\AIAssistant\Services\Ai\SystemPrompt;
+use ASDevs\AIAssistant\Services\Ai\ToolCatalog;
+use ASDevs\AIAssistant\Services\Context\SiteSnapshot;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Memory\MemoryStore;
-use ASDevs\AIAssistant\Skills\SkillStore;
+use ASDevs\AIAssistant\Services\Memory\MemoryStore;
+use ASDevs\AIAssistant\Services\Skills\SkillStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

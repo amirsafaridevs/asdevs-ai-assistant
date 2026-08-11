@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Security;
+namespace ASDevs\AIAssistant\Services\Security;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

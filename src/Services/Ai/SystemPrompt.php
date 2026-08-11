@@ -7,11 +7,11 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Ai;
+namespace ASDevs\AIAssistant\Services\Ai;
 
-use ASDevs\AIAssistant\Context\SiteSnapshot;
-use ASDevs\AIAssistant\Memory\MemoryStore;
-use ASDevs\AIAssistant\Skills\SkillStore;
+use ASDevs\AIAssistant\Services\Context\SiteSnapshot;
+use ASDevs\AIAssistant\Services\Memory\MemoryStore;
+use ASDevs\AIAssistant\Services\Skills\SkillStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

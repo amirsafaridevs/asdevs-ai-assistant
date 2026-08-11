@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Conversations;
+namespace ASDevs\AIAssistant\Services\Conversations;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

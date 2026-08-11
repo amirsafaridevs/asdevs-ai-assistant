@@ -7,11 +7,11 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Admin;
+namespace ASDevs\AIAssistant\Services\Admin;
 
-use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Ai\Settings;
-use ASDevs\AIAssistant\Discovery\CapabilityMap;
+use ASDevs\AIAssistant\Services\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Services\Ai\Settings;
+use ASDevs\AIAssistant\Services\Discovery\CapabilityMap;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

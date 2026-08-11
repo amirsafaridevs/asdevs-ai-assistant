@@ -9,7 +9,7 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Services\Ai\Settings;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
 

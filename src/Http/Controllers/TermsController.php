@@ -7,9 +7,9 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Legal\Terms;
+use ASDevs\AIAssistant\Services\Legal\Terms;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;

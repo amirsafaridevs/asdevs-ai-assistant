@@ -9,12 +9,12 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Context\PageContext;
-use ASDevs\AIAssistant\Context\SiteSnapshot;
-use ASDevs\AIAssistant\Context\StartSuggestions;
+use ASDevs\AIAssistant\Services\Context\PageContext;
+use ASDevs\AIAssistant\Services\Context\SiteSnapshot;
+use ASDevs\AIAssistant\Services\Context\StartSuggestions;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Memory\MemoryStore;
+use ASDevs\AIAssistant\Services\Memory\MemoryStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

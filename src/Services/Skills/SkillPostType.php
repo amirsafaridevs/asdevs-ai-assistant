@@ -7,7 +7,7 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Skills;
+namespace ASDevs\AIAssistant\Services\Skills;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

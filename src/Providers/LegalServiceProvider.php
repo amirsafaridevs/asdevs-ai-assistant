@@ -10,7 +10,7 @@ declare( strict_types=1 );
 namespace ASDevs\AIAssistant\Providers;
 
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Legal\Terms;
+use ASDevs\AIAssistant\Services\Legal\Terms;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

@@ -9,12 +9,12 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Tests;
 
-use ASDevs\AIAssistant\Security\ActionRequest;
-use ASDevs\AIAssistant\Security\BulkGuard;
-use ASDevs\AIAssistant\Security\NeverRules;
-use ASDevs\AIAssistant\Security\RiskLevel;
-use ASDevs\AIAssistant\Security\RiskPolicy;
-use ASDevs\AIAssistant\Security\RouteInspector;
+use ASDevs\AIAssistant\Services\Security\ActionRequest;
+use ASDevs\AIAssistant\Services\Security\BulkGuard;
+use ASDevs\AIAssistant\Services\Security\NeverRules;
+use ASDevs\AIAssistant\Services\Security\RiskLevel;
+use ASDevs\AIAssistant\Services\Security\RiskPolicy;
+use ASDevs\AIAssistant\Services\Security\RouteInspector;
 use PHPUnit\Framework\TestCase;
 
 /**

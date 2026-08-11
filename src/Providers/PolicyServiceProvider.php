@@ -11,12 +11,12 @@ namespace ASDevs\AIAssistant\Providers;
 
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Execution\ActionExecutor;
-use ASDevs\AIAssistant\Security\BulkGuard;
-use ASDevs\AIAssistant\Security\ConfirmationTokens;
-use ASDevs\AIAssistant\Security\NeverRules;
-use ASDevs\AIAssistant\Security\RiskPolicy;
-use ASDevs\AIAssistant\Security\RouteInspector;
+use ASDevs\AIAssistant\Services\Execution\ActionExecutor;
+use ASDevs\AIAssistant\Services\Security\BulkGuard;
+use ASDevs\AIAssistant\Services\Security\ConfirmationTokens;
+use ASDevs\AIAssistant\Services\Security\NeverRules;
+use ASDevs\AIAssistant\Services\Security\RiskPolicy;
+use ASDevs\AIAssistant\Services\Security\RouteInspector;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

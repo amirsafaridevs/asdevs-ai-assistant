@@ -7,11 +7,11 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Rest;
+namespace ASDevs\AIAssistant\Http\Controllers;
 
-use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Ai\Providers\WordPressConnectorProvider;
-use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Services\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Services\Ai\Connectors\WordPressConnectorProvider;
+use ASDevs\AIAssistant\Services\Ai\Settings;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;

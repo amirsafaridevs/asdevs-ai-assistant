@@ -7,12 +7,12 @@
 
 declare( strict_types=1 );
 
-namespace ASDevs\AIAssistant\Execution;
+namespace ASDevs\AIAssistant\Services\Execution;
 
-use ASDevs\AIAssistant\Security\ActionRequest;
-use ASDevs\AIAssistant\Security\BulkGuard;
-use ASDevs\AIAssistant\Security\ConfirmationTokens;
-use ASDevs\AIAssistant\Security\RiskPolicy;
+use ASDevs\AIAssistant\Services\Security\ActionRequest;
+use ASDevs\AIAssistant\Services\Security\BulkGuard;
+use ASDevs\AIAssistant\Services\Security\ConfirmationTokens;
+use ASDevs\AIAssistant\Services\Security\RiskPolicy;
 use WP_Error;
 use WP_REST_Request;
 

@@ -9,10 +9,10 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Context\PageContext;
+use ASDevs\AIAssistant\Services\Context\PageContext;
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Legal\Terms;
-use ASDevs\AIAssistant\Rest\Controller;
+use ASDevs\AIAssistant\Services\Legal\Terms;
+use ASDevs\AIAssistant\Http\Controllers\Controller;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

@@ -9,7 +9,7 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Conversations\ConversationStore;
+use ASDevs\AIAssistant\Services\Conversations\ConversationStore;
 use ASDevs\AIAssistant\Core\ServiceProvider;
 
 if ( ! defined( 'ABSPATH' ) ) {

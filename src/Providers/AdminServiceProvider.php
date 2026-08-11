@@ -9,12 +9,12 @@ declare( strict_types=1 );
 
 namespace ASDevs\AIAssistant\Providers;
 
-use ASDevs\AIAssistant\Admin\SettingsPage;
-use ASDevs\AIAssistant\Ai\ProviderRegistry;
-use ASDevs\AIAssistant\Ai\Settings;
+use ASDevs\AIAssistant\Services\Admin\SettingsPage;
+use ASDevs\AIAssistant\Services\Ai\ProviderRegistry;
+use ASDevs\AIAssistant\Services\Ai\Settings;
 use ASDevs\AIAssistant\Core\Container;
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Discovery\CapabilityMap;
+use ASDevs\AIAssistant\Services\Discovery\CapabilityMap;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;

@@ -10,8 +10,8 @@ declare( strict_types=1 );
 namespace ASDevs\AIAssistant\Providers;
 
 use ASDevs\AIAssistant\Core\ServiceProvider;
-use ASDevs\AIAssistant\Skills\SkillPostType;
-use ASDevs\AIAssistant\Skills\SkillStore;
+use ASDevs\AIAssistant\Services\Skills\SkillPostType;
+use ASDevs\AIAssistant\Services\Skills\SkillStore;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
