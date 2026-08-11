@@ -47,10 +47,14 @@ final class AssetServiceProvider extends ServiceProvider {
 	 * that is only fetched when someone opens the assistant. A classic script
 	 * cannot be code-split, and cannot use the dynamic import that defers it.
 	 *
-	 * Modules are deferred by the browser, so the inline data written before the
-	 * tag still runs first.
+	 * Only the tag that loads the file may become a module. WordPress hands this
+	 * filter the translations and the inline boot data in the same string, and
+	 * those must stay classic scripts: module scope is not global, so
+	 * `window.asdevsAiAssistant` would never be set.
 	 *
-	 * @param string $tag    The script tag.
+	 * Modules are deferred by the browser, so the inline data still runs first.
+	 *
+	 * @param string $tag    The script tag, plus any inline scripts around it.
 	 * @param string $handle Script handle.
 	 */
 	public function as_module( string $tag, string $handle ): string {
@@ -58,16 +62,28 @@ final class AssetServiceProvider extends ServiceProvider {
 			return $tag;
 		}
 
-		if ( false !== strpos( $tag, ' type="module"' ) ) {
-			return $tag;
-		}
+		$pattern = '#<script\b[^>]*\bsrc=[\'"][^\'"]*assets/dist/main\.js[^\'"]*[\'"][^>]*>#i';
 
-		// Replace an explicit type when WordPress wrote one, otherwise add it.
-		if ( false !== strpos( $tag, ' type="text/javascript"' ) ) {
-			return str_replace( ' type="text/javascript"', ' type="module"', $tag );
-		}
+		return (string) preg_replace_callback(
+			$pattern,
+			static function ( array $matches ): string {
+				$element = $matches[0];
 
-		return str_replace( '<script ', '<script type="module" ', $tag );
+				if ( false !== stripos( $element, ' type="module"' ) ) {
+					return $element;
+				}
+
+				$typed = preg_replace( '#\stype=([\'"])[^\'"]*\1#i', ' type="module"', $element, 1, $count );
+
+				if ( $count > 0 && is_string( $typed ) ) {
+					return $typed;
+				}
+
+				return (string) preg_replace( '#^<script\b#i', '<script type="module"', $element, 1 );
+			},
+			$tag,
+			1
+		);
 	}
 
 	/**
