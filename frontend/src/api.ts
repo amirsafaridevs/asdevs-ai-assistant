@@ -1,4 +1,5 @@
 import type {
+  AgentBriefing,
   BootData,
   Bootstrap,
   ConnectorTestResult,
@@ -6,7 +7,8 @@ import type {
   Outcome,
   ServiceSettings,
   Skill,
-  StreamEvent,
+  SkillMatch,
+  LoadedSkills,
 } from './types';
 
 declare global {
@@ -22,6 +24,16 @@ declare global {
 }
 
 export type AgentMode = 'agent' | 'ask';
+
+/** What the skill editor sends when saving. */
+export interface SkillInput {
+  title: string;
+  slug?: string;
+  prompt: string;
+  description?: string;
+  when_to_use?: string;
+  keywords?: string;
+}
 
 export const boot: BootData = window.asdevsAiAssistant ?? {
   restUrl: '',
@@ -115,15 +127,29 @@ export const api = {
   memoryDelete: (id: string) =>
     request<{ deleted: boolean; id: string }>(`/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  /**
+   * What the assistant is told and which tools it may reach.
+   *
+   * Decided on the server, where the site context, memory, and skills live —
+   * the browser runs the agent loop but never authors its instructions.
+   */
+  briefing: (payload: { mode: AgentMode; page: BootData['page']; skills: string[] }) =>
+    request<AgentBriefing>('/agent/briefing', { method: 'POST', body: JSON.stringify(payload) }),
+
   skills: () => request<{ items: Skill[] }>('/skills'),
 
-  createSkill: (payload: { title: string; slug?: string; prompt: string; description?: string }) =>
+  searchSkills: (query: string, limit = 5) =>
+    request<{ query: string; matches: SkillMatch[]; total: number }>(
+      `/skills/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    ),
+
+  loadSkills: (slugs: string[]) =>
+    request<LoadedSkills>('/skills/load', { method: 'POST', body: JSON.stringify({ slugs }) }),
+
+  createSkill: (payload: SkillInput) =>
     request<{ item: Skill }>('/skills', { method: 'POST', body: JSON.stringify(payload) }),
 
-  updateSkill: (
-    id: number,
-    payload: { title: string; slug?: string; prompt: string; description?: string }
-  ) =>
+  updateSkill: (id: number, payload: SkillInput) =>
     request<{ item: Skill }>(`/skills/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
 
   deleteSkill: (id: number) =>
@@ -139,84 +165,4 @@ export function currentPage(): BootData['page'] {
     title: boot.page.title || title,
     document_title: title,
   };
-}
-
-/**
- * Stream one assistant turn.
- *
- * The AI service is never contacted from here — this talks to the site, which
- * uses the WordPress AI connector configured under Settings → Connectors.
- */
-export async function streamChat(
-  messages: Message[],
-  onEvent: (event: StreamEvent) => void,
-  signal: AbortSignal,
-  mode: AgentMode = 'agent',
-  skills: string[] = [],
-  model = 'auto'
-): Promise<void> {
-  const response = await fetch(`${boot.restUrl}/chat`, {
-    method: 'POST',
-    credentials: 'same-origin',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-WP-Nonce': boot.nonce,
-    },
-    body: JSON.stringify({ messages, page: currentPage(), mode, skills, model }),
-  });
-
-  if (!response.ok || !response.body) {
-    const body = (await response.json().catch(() => ({}))) as {
-      message?: string;
-      code?: string;
-      data?: { status?: number; detail?: string };
-    };
-    const detail =
-      (typeof body.data?.detail === 'string' && body.data.detail.trim() !== ''
-        ? body.data.detail
-        : '') ||
-      [body.code, `HTTP ${response.status}`].filter(Boolean).join(' · ');
-
-    onEvent({
-      type: 'error',
-      message: body.message ?? __('The assistant could not be reached.'),
-      detail,
-      retryable: response.status !== 409,
-    });
-
-    return;
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  for (;;) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-
-    let boundary = buffer.indexOf('\n\n');
-
-    while (boundary !== -1) {
-      const chunk = buffer.slice(0, boundary).trim();
-      buffer = buffer.slice(boundary + 2);
-      boundary = buffer.indexOf('\n\n');
-
-      if (!chunk.startsWith('data:')) {
-        continue;
-      }
-
-      try {
-        onEvent(JSON.parse(chunk.slice(5).trim()) as StreamEvent);
-      } catch {
-        // A partial frame is not worth interrupting the answer for.
-      }
-    }
-  }
 }

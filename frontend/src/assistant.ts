@@ -1,6 +1,11 @@
 import { reactive } from 'vue';
-import { __, api, boot, sprintf, streamChat } from './api';
+// Types only: erased at build time, so the SDK stays out of the main bundle.
+import type { Agent, RunState, RunToolApprovalItem } from '@openai/agents';
+import { __, api, boot, currentPage, sprintf } from './api';
 import type { AgentMode } from './api';
+import { fromAgentInput, restoreAttachments, toAgentInput } from './agent/history';
+import { compact, toolText } from './agent/results';
+import type { ConfirmationRequest, ToolContext } from './agent/tools';
 import { extractChoices } from './markdown';
 import type {
   ActiveConversation,
@@ -11,7 +16,6 @@ import type {
   Message,
   MessageAttachment,
   ModelInfo,
-  Outcome,
   PendingConfirmation,
   ServiceSettings,
   Skill,
@@ -23,11 +27,37 @@ import type {
 /** How many times one request may go around the tool loop before stopping. */
 const MAX_STEPS = 12;
 
-/** How many times a single stream may be attempted before showing an error. */
-const MAX_STREAM_ATTEMPTS = 3;
+/**
+ * The agent engine, fetched the first time it is actually needed.
+ *
+ * The OpenAI Agents SDK is by far the heaviest thing this widget carries, and
+ * most admin pages are loaded without anyone opening the assistant. Deferring
+ * it keeps those page loads light; opening the window starts the download, so
+ * by the time a message is typed it is almost always already here.
+ */
+type Engine = typeof import('./agent/engine');
 
-/** How much of a tool result the model is given back. */
-const MAX_RESULT_CHARS = 6000;
+let engine: Engine | null = null;
+let engineRequest: Promise<Engine> | null = null;
+
+function loadEngine(): Promise<Engine> {
+  if (!engineRequest) {
+    engineRequest = import('./agent/engine')
+      .then((loaded) => {
+        engine = loaded;
+
+        return loaded;
+      })
+      .catch((error: unknown) => {
+        // A failed chunk must not poison every later attempt.
+        engineRequest = null;
+
+        throw error;
+      });
+  }
+
+  return engineRequest;
+}
 
 type View = 'chat' | 'settings' | 'skills';
 
@@ -70,6 +100,8 @@ interface State {
   skillsError: string;
   /** Sticky skill slugs active until the person clears them. */
   activeSkills: string[];
+  /** Of those, the ones the assistant picked for itself rather than being handed. */
+  autoSkills: string[];
   /** Current terms document version from the server. */
   termsVersion: string;
   /** Whether the signed-in user has accepted the current terms version. */
@@ -111,6 +143,7 @@ export const state = reactive<State>({
   skillsBusy: false,
   skillsError: '',
   activeSkills: [],
+  autoSkills: [],
   termsVersion: bootTerms?.version ?? '',
   termsAccepted: bootTerms?.accepted === true,
   termsSections: Array.isArray(bootTerms?.sections) ? bootTerms.sections : [],
@@ -270,6 +303,12 @@ export function open(): void {
     return;
   }
 
+  // Fetch the agent engine while they are still reading or typing, so sending
+  // the first message rarely has to wait for it.
+  void loadEngine().catch(() => {
+    // Nothing to say yet — the run itself reports a failure it cannot recover.
+  });
+
   // Retry when the first bootstrap failed or the connector still looked missing —
   // credentials may have been saved since the page loaded.
   if (state.loading || state.loadError !== '' || !state.ready) {
@@ -285,6 +324,8 @@ export function cancel(): void {
   controller?.abort();
   controller = null;
   state.busy = false;
+  paused = null;
+  approvals = [];
 
   for (const item of state.bubbles) {
     closeOpenSteps(item, 'skipped');
@@ -321,6 +362,7 @@ export async function loadSkills(): Promise<void> {
     // Drop sticky selections that no longer exist.
     const known = new Set(state.skills.map((item) => item.slug));
     state.activeSkills = state.activeSkills.filter((slug) => known.has(slug));
+    state.autoSkills = state.autoSkills.filter((slug) => known.has(slug));
   } catch (error) {
     state.skillsError = (error as Error).message || __('Could not load skills.');
   } finally {
@@ -347,10 +389,35 @@ export function toggleSkill(slug: string): void {
 
 export function clearSkill(slug: string): void {
   state.activeSkills = state.activeSkills.filter((item) => item !== slug);
+  state.autoSkills = state.autoSkills.filter((item) => item !== slug);
 }
 
 export function clearActiveSkills(): void {
   state.activeSkills = [];
+  state.autoSkills = [];
+}
+
+/**
+ * Make the skills the assistant loaded for itself sticky and visible.
+ *
+ * The person did not ask for these, so they show up as chips they can take
+ * back off — the assistant choosing a skill is a suggestion they can overrule,
+ * not something that happens behind their back.
+ */
+function activateLoadedSkills(slugs: string[]): void {
+  for (const slug of slugs) {
+    const clean = slug.trim().toLowerCase();
+
+    if (clean === '' || state.activeSkills.includes(clean)) {
+      continue;
+    }
+
+    state.activeSkills = [...state.activeSkills, clean];
+
+    if (!state.autoSkills.includes(clean)) {
+      state.autoSkills = [...state.autoSkills, clean];
+    }
+  }
 }
 
 export async function saveSkill(payload: {
@@ -359,12 +426,16 @@ export async function saveSkill(payload: {
   slug?: string;
   prompt: string;
   description?: string;
+  when_to_use?: string;
+  keywords?: string;
 }): Promise<Skill> {
   const body = {
     title: payload.title,
     slug: payload.slug,
     prompt: payload.prompt,
     description: payload.description,
+    when_to_use: payload.when_to_use,
+    keywords: payload.keywords,
   };
 
   const result =
@@ -396,10 +467,21 @@ export async function startNew(): Promise<void> {
 
 /** Wipe the in-memory chat without touching the server. */
 function resetLocal(): void {
+  // Skills the person pinned stay pinned; the ones the assistant chose belonged
+  // to the task that just ended.
+  if (state.autoSkills.length > 0) {
+    const auto = new Set(state.autoSkills);
+
+    state.activeSkills = state.activeSkills.filter((slug) => !auto.has(slug));
+    state.autoSkills = [];
+  }
+
   state.bubbles = [];
   state.messages = [];
   state.pending = null;
   state.choices = null;
+  paused = null;
+  approvals = [];
   state.conversationId = newId();
   state.title = '';
   state.lastPrompt = '';
@@ -777,209 +859,201 @@ export async function retry(): Promise<void> {
   await run();
 }
 
-/** Wait without blocking abort — used between quiet reconnect attempts. */
-async function wait(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) {
-    throw new DOMException('Aborted', 'AbortError');
+/** What the tools need from the session they are running inside. */
+const toolContext: ToolContext = {
+  mode: () => state.mode,
+  onSkillsLoaded: (slugs) => activateLoadedSkills(slugs),
+  onConfirmationRequired: (request: ConfirmationRequest) => {
+    // The token stays here, out of the conversation, so only a real click can
+    // redeem it. `collected` and `skipped` stay empty now that the SDK's run
+    // state remembers the rest of the turn; they are kept for conversations
+    // saved by earlier versions.
+    state.pending = {
+      toolUseId: request.callId,
+      token: request.token,
+      summary: request.summary,
+      reversible: request.reversible,
+      affected: request.affected,
+      method: request.method,
+      route: request.route,
+      params: request.params,
+      collected: [],
+      skipped: [],
+    };
+  },
+};
+
+/** The run that stopped for a confirmation, kept so it can carry on in place. */
+let paused: RunState<unknown, Agent<unknown, 'text'>> | null = null;
+
+/** The calls that run is waiting on a decision for. */
+let approvals: RunToolApprovalItem[] = [];
+
+/**
+ * Plan first, when the request is big enough to be worth planning.
+ *
+ * The plan is context for the working agent, not orders — what is actually on
+ * the site always wins over what was guessed before looking.
+ */
+async function instructionsFor(
+  sdk: Engine,
+  base: string,
+  answer: Bubble,
+  signal: AbortSignal
+): Promise<string> {
+  if (!sdk.worthPlanning(state.lastPrompt, state.mode)) {
+    return base;
   }
 
-  await new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
+  const step = beginStep(answer, 'thinking', __('Working out what you need'));
+  const plan = await sdk.planFor(state.lastPrompt, base, state.model === 'auto' ? '' : state.model, signal);
 
-    const onAbort = (): void => {
-      window.clearTimeout(timer);
-      reject(new DOMException('Aborted', 'AbortError'));
-    };
+  if (!plan) {
+    // Nothing useful came back; do not leave an empty line on the timeline.
+    answer.steps = (answer.steps ?? []).filter((entry) => entry.id !== step.id);
 
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
+    return base;
+  }
+
+  const context = sdk.planAsContext(plan);
+
+  step.detail = context;
+  endStep(step, 'done');
+
+  return `${base}\n\n--- Plan for this request ---\n${context}`;
 }
 
-async function run(): Promise<void> {
+/**
+ * One assistant turn, driven by the OpenAI Agents SDK.
+ *
+ * The loop, the tool calls, and the turn limit are the SDK's. What the model is
+ * told and which tools exist still come from the server, and the model itself
+ * is still reached through this site's own connector — the SDK talks to the
+ * plugin's OpenAI-shaped endpoint, never to a vendor.
+ *
+ * @param resume A run that stopped for a confirmation and may now carry on.
+ */
+async function run(resume: RunState<unknown, Agent<unknown, 'text'>> | null = null): Promise<void> {
   state.busy = true;
   controller = new AbortController();
 
-  // One answer per turn, however many rounds of tool use it takes to get there.
-  const answer = bubble('assistant');
+  const signal = controller.signal;
+  const answer = resume ? lastAssistant() : bubble('assistant');
+  const openTools = new Map<string, Step>();
+
+  // Text after a tool call is a new paragraph, not a continuation of the last.
+  let gapPending = false;
 
   try {
-    for (let step = 0; step < MAX_STEPS; step += 1) {
-      const calls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-      const thoughts: Block[] = [];
-      let said = '';
-      let failed = false;
+    // Usually already here, because opening the window started the download.
+    // When it is not, the bubble shows what is being prepared rather than an
+    // empty pause.
+    answer.booting = engine === null;
 
-      for (let attempt = 1; attempt <= MAX_STREAM_ATTEMPTS; attempt += 1) {
-        const attemptCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-        const attemptThoughts: Block[] = [];
-        const attemptOpen: { thinking: Step | null } = { thinking: null };
-        let attemptSaid = '';
-        let attemptFailed = false;
-        let attemptError: { message: string; detail: string; retryable: boolean } | null = null;
-        let gotContent = false;
+    const sdk = engine ?? (await loadEngine());
 
-        if (attempt > 1) {
-          answer.statusHint = __('Still connecting…');
+    answer.booting = false;
+
+    sdk.configureRuntime();
+
+    const briefing = await api.briefing({
+      mode: state.mode,
+      page: currentPage(),
+      skills: [...state.activeSkills],
+    });
+
+    const agent = new sdk.Agent({
+      name: 'Assistant',
+      instructions: resume ? briefing.instructions : await instructionsFor(sdk, briefing.instructions, answer, signal),
+      model: state.model === '' ? 'auto' : state.model,
+      tools: sdk.createTools(briefing.tools, toolContext),
+    });
+
+    const result = await sdk.run(agent, resume ?? toAgentInput(state.messages), {
+      stream: true,
+      maxTurns: MAX_STEPS,
+      signal,
+    });
+
+    for await (const event of result) {
+      if (event.type === 'raw_model_stream_event') {
+        if (event.data.type !== 'output_text_delta') {
+          continue;
         }
 
-        try {
-          await streamChat(
-            state.messages,
-            (event) => {
-              if (event.type === 'error') {
-                attemptFailed = true;
-                attemptError = {
-                  message: event.message ?? __('Something went wrong.'),
-                  detail: event.detail ?? '',
-                  retryable: event.retryable !== false,
-                };
-                return;
-              }
+        answer.statusHint = null;
 
-              if (answer.statusHint) {
-                answer.statusHint = null;
-              }
+        if (gapPending && answer.text !== '') {
+          answer.text += '\n\n';
+        }
 
-              if (event.type === 'thinking' && event.text) {
-                gotContent = true;
-                attemptOpen.thinking =
-                  attemptOpen.thinking ?? beginStep(answer, 'thinking', __('Thinking it through'));
-                attemptOpen.thinking.detail += event.text;
-              }
+        gapPending = false;
+        answer.text += event.data.delta;
 
-              if (event.type === 'thinking_end') {
-                if (attemptOpen.thinking) {
-                  endStep(attemptOpen.thinking, 'done');
-                  attemptOpen.thinking = null;
-                }
+        continue;
+      }
 
-                // Reasoning goes back to the service exactly as it arrived; the
-                // signature is what makes the next turn accept it.
-                attemptThoughts.push(
-                  event.kind === 'redacted_thinking'
-                    ? { type: 'redacted_thinking', data: event.data ?? '' }
-                    : { type: 'thinking', thinking: event.thinking ?? '', signature: event.signature ?? '' }
-                );
-              }
+      if (event.type !== 'run_item_stream_event') {
+        continue;
+      }
 
-              if (event.type === 'text' && event.text) {
-                gotContent = true;
+      const item = event.item;
 
-                if (attemptSaid === '' && answer.text !== '') {
-                  answer.text += '\n\n';
-                }
+      if (item.type === 'reasoning_item') {
+        // Chat Completions puts the thought on rawContent, not content.
+        const raw = item.rawItem.rawContent ?? [];
+        const thought =
+          raw.length > 0
+            ? raw.map((part) => part.text).join('')
+            : item.rawItem.content.map((part) => part.text).join('');
 
-                attemptSaid += event.text;
-                answer.text += event.text;
-              }
+        if (thought.trim() !== '') {
+          endStep(beginStep(answer, 'thinking', __('Thinking it through'), thought), 'done');
+        }
 
-              if (event.type === 'tool_call' && event.id && event.name) {
-                gotContent = true;
-                attemptCalls.push({ id: event.id, name: event.name, input: event.arguments ?? {} });
-              }
-            },
-            controller.signal,
-            state.mode,
-            [...state.activeSkills],
-            state.model
-          );
-        } catch (error) {
-          if ((error as Error).name === 'AbortError') {
-            throw error;
+        continue;
+      }
+
+      if (item.type === 'tool_call_item' && item.rawItem.type === 'function_call') {
+        const call = item.rawItem;
+        const input = parseArguments(call.arguments);
+
+        openTools.set(call.callId, beginStep(answer, 'tool', labelFor(call.name, input), detailFor(call.name, input)));
+        gapPending = true;
+
+        continue;
+      }
+
+      if (item.type === 'tool_approval_item') {
+        // Waiting is not the same as working.
+        for (const step of openTools.values()) {
+          if (step.status === 'running') {
+            step.label = __('Waiting for you to decide');
           }
-
-          attemptFailed = true;
-          attemptError = {
-            message: __('Something interrupted the reply. We can try again.'),
-            detail: (error as Error).message,
-            retryable: true,
-          };
         }
 
-        if (attemptOpen.thinking) {
-          endStep(attemptOpen.thinking, 'done');
-        }
-
-        if (!attemptFailed) {
-          calls.push(...attemptCalls);
-          thoughts.push(...attemptThoughts);
-          said = attemptSaid;
-          answer.statusHint = null;
-          break;
-        }
-
-        const canRetry =
-          attemptError?.retryable !== false && !gotContent && attempt < MAX_STREAM_ATTEMPTS;
-
-        if (!canRetry) {
-          failed = true;
-          answer.error = attemptError;
-          answer.statusHint = null;
-          break;
-        }
-
-        answer.statusHint = __('Still connecting…');
-        await wait(500 * attempt, controller.signal);
+        continue;
       }
 
-      if (failed) {
-        break;
-      }
+      if (item.type === 'tool_call_output_item' && item.rawItem.type === 'function_call_result') {
+        const step = openTools.get(item.rawItem.callId);
 
-      // Always keep the full model trail: thinking, text, and every tool call,
-      // in the order they happened — including the final answer with no tools.
-      if (thoughts.length > 0 || said.trim() !== '' || calls.length > 0) {
-        const assistantBlocks: Block[] = [...thoughts];
-
-        if (said.trim() !== '') {
-          assistantBlocks.push({ type: 'text', text: said });
-        }
-
-        for (const call of calls) {
-          assistantBlocks.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input });
-        }
-
-        state.messages.push({ role: 'assistant', content: assistantBlocks });
-      }
-
-      if (calls.length === 0) {
-        break;
-      }
-
-      const results: Block[] = [];
-      let paused = false;
-
-      for (let index = 0; index < calls.length; index += 1) {
-        const call = calls[index];
-        const line = beginStep(answer, 'tool', labelFor(call.name, call.input), detailFor(call.name, call.input));
-        const outcome = await runTool(call);
-
-        if (outcome === 'paused' && state.pending) {
-          // The step stays open: the work is not finished, it is waiting.
-          line.label = __('Waiting for you to decide');
-
-          // Every call this turn still owes an answer, even the ones we never
-          // reached — they are handed back once the person decides.
-          state.pending.collected = results;
-          state.pending.skipped = calls.slice(index + 1).map((skipped) => skipped.id);
-          paused = true;
-          break;
-        }
-
-        if (outcome !== 'paused') {
-          endStep(line, outcome.type === 'tool_result' && outcome.is_error ? 'failed' : 'done');
-          results.push(outcome);
+        if (step) {
+          endStep(step, failed(item.rawItem.status, item.output) ? 'failed' : 'done');
+          openTools.delete(item.rawItem.callId);
         }
       }
+    }
 
-      if (paused) {
-        break;
-      }
+    await result.completed;
 
-      state.messages.push({ role: 'user', content: results });
+    state.messages = restoreAttachments(fromAgentInput(result.history), state.messages);
+
+    const waiting = result.interruptions ?? [];
+
+    if (waiting.length > 0) {
+      paused = result.state as RunState<unknown, Agent<unknown, 'text'>>;
+      approvals = waiting;
     }
   } catch (error) {
     if ((error as Error).name !== 'AbortError') {
@@ -993,6 +1067,7 @@ async function run(): Promise<void> {
     state.busy = false;
     controller = null;
     answer.statusHint = null;
+    answer.booting = false;
 
     // A step left open would spin forever — unless the turn is genuinely
     // waiting on a decision.
@@ -1008,6 +1083,28 @@ async function run(): Promise<void> {
 
     await persist();
   }
+}
+
+/** Tool arguments arrive as a JSON string; a broken one is not worth throwing over. */
+function parseArguments(raw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw || '{}');
+
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Whether a tool answer should read as a failure on the timeline. */
+function failed(status: string, output: unknown): boolean {
+  if (status === 'incomplete') {
+    return true;
+  }
+
+  const text = typeof output === 'string' ? output : JSON.stringify(output ?? '');
+
+  return text.includes('"error"') || text.includes('"status":"error"');
 }
 
 /** Name the work in the person's terms, never in the site's. */
@@ -1030,6 +1127,10 @@ function labelFor(name: string, input: Record<string, unknown>): string {
       }
 
       return subject ? sprintf(__('Updating %1$s'), subject) : __('Making the change');
+    case 'find_skills':
+      return __('Looking for a skill that fits');
+    case 'load_skill':
+      return __('Following a skill from this site');
     case 'memory_list':
       return __('Checking remembered notes');
     case 'memory_write':
@@ -1127,6 +1228,14 @@ function detailFor(name: string, input: Record<string, unknown>): string {
     return hint ? `${line}\n${hint}` : line;
   }
 
+  if (name === 'find_skills' && typeof input.query === 'string') {
+    return input.query.slice(0, 120);
+  }
+
+  if (name === 'load_skill' && Array.isArray(input.slugs)) {
+    return input.slugs.map((slug) => `/${String(slug)}`).join(' · ');
+  }
+
   if (name === 'memory_write' && typeof input.content === 'string') {
     return input.content.slice(0, 120);
   }
@@ -1160,92 +1269,6 @@ function paramsHint(params: Record<string, unknown> | null): string {
   return bits.join(' · ');
 }
 
-type ToolOutcome = Block | 'paused';
-
-async function runTool(
-  call: { id: string; name: string; input: Record<string, unknown> }
-): Promise<ToolOutcome> {
-  try {
-    if (state.mode === 'ask' && (call.name === 'memory_write' || call.name === 'memory_delete')) {
-      return result(
-        call.id,
-        {
-          error:
-            'Ask mode is read-only. Memory cannot be changed here. Tell the person to switch to Agent mode if they want that.',
-        },
-        true
-      );
-    }
-
-    if (call.name === 'list_capabilities') {
-      return result(call.id, await api.capabilities());
-    }
-
-    if (call.name === 'describe_capability') {
-      return result(call.id, await api.describe(String(call.input.route ?? '')));
-    }
-
-    if (call.name === 'call_api') {
-      const method = String(call.input.method ?? 'GET').toUpperCase();
-      const route = String(call.input.route ?? '');
-      const params = (call.input.params as Record<string, unknown>) ?? {};
-
-      if (state.mode === 'ask' && method !== 'GET') {
-        return result(
-          call.id,
-          {
-            error:
-              'Ask mode is read-only. Only GET is allowed. Explain what would change and tell the person to switch to Agent mode to do it.',
-          },
-          true
-        );
-      }
-
-      const outcome = await api.execute({ method, route, params });
-
-      if (outcome.status === 'confirmation_required' && outcome.confirmation) {
-        // The token stays here, out of the conversation, so only a real click
-        // can redeem it.
-        state.pending = {
-          toolUseId: call.id,
-          token: outcome.confirmation,
-          summary: outcome.assessment?.summary ?? '',
-          reversible: outcome.assessment?.reversible ?? true,
-          affected: outcome.assessment?.affected ?? null,
-          method,
-          route,
-          params,
-          collected: [],
-          skipped: [],
-        };
-
-        return 'paused';
-      }
-
-      return result(call.id, compact(outcome), outcome.status !== 'ok');
-    }
-
-    if (call.name === 'memory_list') {
-      return result(call.id, await api.memoryList());
-    }
-
-    if (call.name === 'memory_write') {
-      const content = String(call.input.content ?? '');
-      const id = typeof call.input.id === 'string' && call.input.id !== '' ? call.input.id : undefined;
-
-      return result(call.id, await api.memoryWrite({ content, id }));
-    }
-
-    if (call.name === 'memory_delete') {
-      return result(call.id, await api.memoryDelete(String(call.input.id ?? '')));
-    }
-
-    return result(call.id, { error: `Unknown tool: ${call.name}` }, true);
-  } catch (error) {
-    return result(call.id, { error: (error as Error).message }, true);
-  }
-}
-
 /** The person said yes to a level three change. */
 export async function confirmPending(): Promise<void> {
   const pending = state.pending;
@@ -1255,9 +1278,92 @@ export async function confirmPending(): Promise<void> {
   }
 
   state.pending = null;
-  state.busy = true;
 
+  if (paused && approvals.length > 0) {
+    const resume = paused;
+    const items = approvals;
+
+    paused = null;
+    approvals = [];
+
+    for (const item of items) {
+      resume.approve(item);
+    }
+
+    await run(resume);
+
+    return;
+  }
+
+  // Restored after a reload, so there is no run left to carry on. Redeem the
+  // token by hand and let the assistant pick the thread back up from there.
+  await settleByHand(pending, true);
+}
+
+/** The person said no. The assistant is told plainly, and does not insist. */
+export async function declinePending(): Promise<void> {
+  const pending = state.pending;
+
+  if (!pending) {
+    return;
+  }
+
+  state.pending = null;
+
+  if (paused && approvals.length > 0) {
+    const resume = paused;
+    const items = approvals;
+
+    paused = null;
+    approvals = [];
+
+    const answer = lastAssistant();
+
+    closeOpenSteps(answer, 'skipped');
+    endStep(beginStep(answer, 'note', __('You declined that change')), 'skipped');
+
+    for (const item of items) {
+      resume.reject(item);
+    }
+
+    await run(resume);
+
+    return;
+  }
+
+  await settleByHand(pending, false);
+}
+
+/**
+ * Close out a confirmation the browser no longer has a running turn for.
+ *
+ * This is the reload path: the decision is recorded straight into the stored
+ * conversation, and the next turn starts from it.
+ */
+async function settleByHand(pending: PendingConfirmation, approved: boolean): Promise<void> {
   const answer = lastAssistant();
+
+  if (!approved) {
+    closeOpenSteps(answer, 'skipped');
+    endStep(beginStep(answer, 'note', __('You declined that change')), 'skipped');
+
+    state.messages.push({
+      role: 'user',
+      content: [
+        toolResult(
+          pending.toolUseId,
+          { declined: true, note: 'The person declined this change. Do not ask again.' },
+          false
+        ),
+      ],
+    });
+
+    await run();
+
+    return;
+  }
+
+  state.busy = true;
 
   closeOpenSteps(answer);
 
@@ -1280,14 +1386,14 @@ export async function confirmPending(): Promise<void> {
 
     state.messages.push({
       role: 'user',
-      content: settle(pending, result(pending.toolUseId, compact(outcome), outcome.status !== 'ok')),
+      content: [toolResult(pending.toolUseId, compact(outcome), outcome.status !== 'ok')],
     });
   } catch (error) {
     endStep(line, 'failed');
 
     state.messages.push({
       role: 'user',
-      content: settle(pending, result(pending.toolUseId, { error: (error as Error).message }, true)),
+      content: [toolResult(pending.toolUseId, { error: (error as Error).message }, true)],
     });
   } finally {
     state.busy = false;
@@ -1296,169 +1402,8 @@ export async function confirmPending(): Promise<void> {
   await run();
 }
 
-/** The person said no. The assistant is told plainly, and does not insist. */
-export async function declinePending(): Promise<void> {
-  const pending = state.pending;
-
-  if (!pending) {
-    return;
-  }
-
-  state.pending = null;
-
-  const answer = lastAssistant();
-
-  closeOpenSteps(answer, 'skipped');
-  endStep(beginStep(answer, 'note', __('You declined that change')), 'skipped');
-
-  state.messages.push({
-    role: 'user',
-    content: settle(
-      pending,
-      result(pending.toolUseId, { declined: true, note: 'The person declined this change. Do not ask again.' }, false)
-    ),
-  });
-
-  await run();
-}
-
-/** Close out every call from the paused turn, in the order they were made. */
-function settle(pending: PendingConfirmation, decided: Block): Block[] {
-  return [
-    ...pending.collected,
-    decided,
-    ...pending.skipped.map((id) =>
-      result(id, { skipped: true, note: 'Not run: the turn stopped for a confirmation.' }, false)
-    ),
-  ];
-}
-
-function result(id: string, payload: unknown, isError = false): Block {
-  let content = typeof payload === 'string' ? payload : JSON.stringify(payload);
-
-  if (content.length > MAX_RESULT_CHARS) {
-    content = `${content.slice(0, MAX_RESULT_CHARS)}\n…(truncated)`;
-  }
-
-  return { type: 'tool_result', tool_use_id: id, content, is_error: isError };
-}
-
-/** Keep the model's view of a result small and relevant — but never strip display URLs. */
-function compact(outcome: Outcome): Record<string, unknown> {
-  return {
-    status: outcome.status,
-    message: outcome.message,
-    kind: outcome.kind,
-    total: outcome.total ?? null,
-    data: shrinkPayload(outcome.data),
-    assessment: outcome.assessment,
-  };
-}
-
-function shrinkPayload(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.slice(0, 20).map(shrinkPayload);
-  }
-
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-
-  const source = value as Record<string, unknown>;
-  const isMedia =
-    typeof source.source_url === 'string' ||
-    source.media_type !== undefined ||
-    source.mime_type !== undefined ||
-    (typeof source.type === 'string' && source.type === 'attachment');
-
-  const keep = isMedia
-    ? [
-        'id',
-        'title',
-        'alt_text',
-        'caption',
-        'description',
-        'slug',
-        'status',
-        'date',
-        'link',
-        'source_url',
-        'mime_type',
-        'media_type',
-        'media_details',
-      ]
-    : ['id', 'title', 'name', 'slug', 'status', 'date', 'link', 'email', 'roles', 'count', 'total', 'excerpt'];
-
-  const kept: Record<string, unknown> = {};
-
-  for (const key of keep) {
-    if (!(key in source)) {
-      continue;
-    }
-
-    const field = source[key];
-
-    if (key === 'media_details') {
-      kept[key] = shrinkMediaDetails(field);
-      continue;
-    }
-
-    kept[key] = unwrapRendered(field);
-  }
-
-  return Object.keys(kept).length > 0 ? kept : source;
-}
-
-function unwrapRendered(field: unknown): unknown {
-  if (field && typeof field === 'object' && 'rendered' in (field as Record<string, unknown>)) {
-    return (field as { rendered: unknown }).rendered;
-  }
-
-  return field;
-}
-
-/** Keep width/height and usable image URLs only. */
-function shrinkMediaDetails(field: unknown): unknown {
-  if (!field || typeof field !== 'object') {
-    return field;
-  }
-
-  const details = field as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-
-  for (const key of ['width', 'height', 'file'] as const) {
-    if (key in details) {
-      out[key] = details[key];
-    }
-  }
-
-  const sizes = details.sizes;
-
-  if (sizes && typeof sizes === 'object') {
-    const shrunk: Record<string, unknown> = {};
-
-    for (const [name, size] of Object.entries(sizes as Record<string, unknown>)) {
-      if (!size || typeof size !== 'object') {
-        continue;
-      }
-
-      const row = size as Record<string, unknown>;
-
-      if (typeof row.source_url === 'string') {
-        shrunk[name] = {
-          source_url: row.source_url,
-          width: row.width,
-          height: row.height,
-        };
-      }
-    }
-
-    if (Object.keys(shrunk).length > 0) {
-      out.sizes = shrunk;
-    }
-  }
-
-  return out;
+function toolResult(id: string, payload: unknown, isError: boolean): Block {
+  return { type: 'tool_result', tool_use_id: id, content: toolText(payload), is_error: isError };
 }
 
 async function persist(): Promise<void> {

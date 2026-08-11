@@ -62,6 +62,38 @@ final class SkillsController extends Controller {
 
 		register_rest_route(
 			self::NAMESPACE,
+			'/skills/search',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'search' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
+				'args'                => array(
+					'q'     => array(
+						'type'              => 'string',
+						'required'          => false,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'limit' => array(
+						'type'              => 'integer',
+						'required'          => false,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/skills/load',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'load' ),
+				'permission_callback' => array( $this, 'check_terms_permission' ),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			'/skills/(?P<id>\d+)',
 			array(
 				array(
@@ -113,6 +145,53 @@ final class SkillsController extends Controller {
 				'items' => $this->skills->all(),
 			)
 		);
+	}
+
+	/**
+	 * Rank skills against what the person is trying to do.
+	 *
+	 * Answers the assistant's own `find_skills` tool: metadata only, so
+	 * browsing the catalogue never costs as much as loading from it.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 */
+	public function search( WP_REST_Request $request ): WP_REST_Response {
+		$query = trim( (string) $request->get_param( 'q' ) );
+		$limit = (int) $request->get_param( 'limit' );
+		$limit = $limit > 0 ? $limit : 5;
+
+		$matches = $this->skills->search( $query, $limit );
+
+		return new WP_REST_Response(
+			array(
+				'query'   => $query,
+				'matches' => $matches,
+				'total'   => count( $matches ),
+			)
+		);
+	}
+
+	/**
+	 * Full prompts for the skills the assistant chose.
+	 *
+	 * @param WP_REST_Request $request The request.
+	 */
+	public function load( WP_REST_Request $request ): WP_REST_Response {
+		$raw = $request->get_param( 'slugs' );
+
+		if ( is_string( $raw ) ) {
+			$raw = array( $raw );
+		}
+
+		$slugs = array();
+
+		foreach ( array_slice( is_array( $raw ) ? $raw : array(), 0, 10 ) as $value ) {
+			if ( is_string( $value ) || is_numeric( $value ) ) {
+				$slugs[] = (string) $value;
+			}
+		}
+
+		return new WP_REST_Response( $this->skills->load( $slugs ) );
 	}
 
 	/**
@@ -213,6 +292,8 @@ final class SkillsController extends Controller {
 			'slug'        => (string) $request->get_param( 'slug' ),
 			'prompt'      => (string) $request->get_param( 'prompt' ),
 			'description' => (string) $request->get_param( 'description' ),
+			'when_to_use' => (string) $request->get_param( 'when_to_use' ),
+			'keywords'    => $request->get_param( 'keywords' ) ?? '',
 		);
 	}
 }

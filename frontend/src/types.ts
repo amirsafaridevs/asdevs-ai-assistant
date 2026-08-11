@@ -73,6 +73,21 @@ export interface Message {
   content: Block[];
 }
 
+/** One tool the server allows, exactly as the model is told about it. */
+export interface ToolSchema {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
+
+/** Instructions and tools for one run, decided on the server. */
+export interface AgentBriefing {
+  instructions: string;
+  tools: ToolSchema[];
+  skills: string[];
+  mode: string;
+}
+
 /** A file shown on a user bubble (and sent to the model as a file part). */
 export interface MessageAttachment {
   name: string;
@@ -104,6 +119,8 @@ export interface Bubble {
   steps?: Step[];
   /** Soft live status (e.g. reconnecting) shown instead of the default typing label. */
   statusHint?: string | null;
+  /** True while the agent engine is still being fetched for this turn. */
+  booting?: boolean;
   error?: { message: string; detail: string; retryable: boolean } | null;
 }
 
@@ -134,8 +151,29 @@ export interface Skill {
   slug: string;
   prompt: string;
   description: string;
+  /** Written for the assistant: when it should reach for this skill on its own. */
+  when_to_use?: string;
+  /** Extra search terms and synonyms, comma separated. */
+  keywords?: string;
   created_at?: number;
   updated_at?: number;
+}
+
+/** One hit from the assistant's own skill search — metadata, never the prompt. */
+export interface SkillMatch {
+  slug: string;
+  title: string;
+  description: string;
+  when_to_use: string;
+  score: number;
+  matched_on: string[];
+}
+
+/** What came back when the assistant loaded skills for itself. */
+export interface LoadedSkills {
+  loaded: Array<{ slug: string; title: string; description: string; prompt: string }>;
+  missing: string[];
+  skipped: string[];
 }
 
 export interface ConnectorTestResult {
@@ -195,19 +233,3 @@ export interface ActiveConversation {
   updated_at?: number;
 }
 
-export interface StreamEvent {
-  type: 'text' | 'thinking' | 'thinking_end' | 'tool_call' | 'done' | 'error' | 'end';
-  text?: string;
-  id?: string;
-  name?: string;
-  arguments?: Record<string, unknown>;
-  reason?: string;
-  message?: string;
-  detail?: string;
-  retryable?: boolean;
-  /** Reasoning blocks, which go back to the service untouched on the next turn. */
-  kind?: 'thinking' | 'redacted_thinking';
-  thinking?: string;
-  signature?: string;
-  data?: string;
-}

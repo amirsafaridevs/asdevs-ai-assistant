@@ -270,6 +270,20 @@ final class WordPressConnectorProvider implements AiProvider {
 			$builder = $builder->using_function_declarations( ...$declarations );
 		}
 
+		$temperature = $request->temperature();
+
+		if ( null !== $temperature ) {
+			$builder = $builder->using_temperature( $temperature );
+		}
+
+		$schema = $request->output_schema();
+
+		if ( null !== $schema ) {
+			// Structured output: the model answers with JSON matching the schema
+			// instead of prose. Used by agents that declare an output type.
+			$builder = $builder->as_output_schema( $schema );
+		}
+
 		$result = $builder->generate_text_result();
 
 		if ( is_wp_error( $result ) ) {
@@ -358,11 +372,13 @@ final class WordPressConnectorProvider implements AiProvider {
 				$schema = json_decode( (string) wp_json_encode( $schema ), true );
 			}
 
-			if ( ! is_array( $schema ) ) {
+			if ( ! is_array( $schema ) || array() === $schema ) {
 				$schema = array(
 					'type'       => 'object',
-					'properties' => array(),
+					'properties' => (object) array(),
 				);
+			} else {
+				$schema = $this->schema_maps_as_objects( $schema );
 			}
 
 			$declarations[] = new FunctionDeclaration(
@@ -373,6 +389,47 @@ final class WordPressConnectorProvider implements AiProvider {
 		}
 
 		return $declarations;
+	}
+
+	/**
+	 * Keep JSON Schema keyword maps encoding as objects, not as arrays.
+	 *
+	 * PHP cannot tell an empty map from an empty list, so a tool that takes no
+	 * arguments arrives as `properties => array()` and would be sent to the
+	 * provider as `"properties": []`. Providers validate the schema and reject
+	 * the whole request ("[] is not of type 'object'"), which surfaced as a 503
+	 * on every chat turn that declared a no-argument tool.
+	 *
+	 * Only keywords whose value is a map of schemas are touched; `required`,
+	 * `enum`, `anyOf` and friends stay lists.
+	 *
+	 * @param array<string, mixed> $schema A JSON Schema fragment.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function schema_maps_as_objects( array $schema ): array {
+		$maps = array( 'properties', 'patternProperties', 'definitions', '$defs', 'dependentSchemas' );
+
+		foreach ( $schema as $key => $value ) {
+			if ( ! is_array( $value ) ) {
+				continue;
+			}
+
+			if ( in_array( $key, $maps, true ) ) {
+				$schema[ $key ] = array() === $value
+					? (object) array()
+					: array_map(
+						fn( $child ) => is_array( $child ) ? $this->schema_maps_as_objects( $child ) : $child,
+						$value
+					);
+
+				continue;
+			}
+
+			$schema[ $key ] = $this->schema_maps_as_objects( $value );
+		}
+
+		return $schema;
 	}
 
 	/**

@@ -11,6 +11,8 @@ const editingId = ref<number | null>(null);
 const title = ref('');
 const slug = ref('');
 const description = ref('');
+const whenToUse = ref('');
+const keywords = ref('');
 const prompt = ref('');
 const busy = ref(false);
 const error = ref('');
@@ -45,6 +47,8 @@ function resetForm(keepScreen = true): void {
   title.value = '';
   slug.value = '';
   description.value = '';
+  whenToUse.value = '';
+  keywords.value = '';
   prompt.value = '';
   slugTouched.value = false;
   error.value = '';
@@ -64,6 +68,8 @@ function startEdit(skill: Skill): void {
   title.value = skill.title;
   slug.value = skill.slug;
   description.value = skill.description || '';
+  whenToUse.value = skill.when_to_use || '';
+  keywords.value = skill.keywords || '';
   prompt.value = skill.prompt;
   slugTouched.value = true;
   error.value = '';
@@ -102,6 +108,8 @@ async function submit(): Promise<void> {
       slug: slug.value.trim(),
       prompt: prompt.value.trim(),
       description: description.value.trim(),
+      when_to_use: whenToUse.value.trim(),
+      keywords: keywords.value.trim(),
     });
     resetForm(false);
   } catch (err) {
@@ -266,6 +274,35 @@ async function destroy(skill: Skill): Promise<void> {
           :value="description"
           :placeholder="__('Optional')"
           @input="description = ($event.target as HTMLInputElement).value"
+        />
+      </div>
+
+      <div class="asdevs-ai-field">
+        <label class="asdevs-ai-label" for="asdevs-ai-skill-when">{{ __('When to use this') }}</label>
+        <textarea
+          id="asdevs-ai-skill-when"
+          class="asdevs-ai-input asdevs-ai-skills__input"
+          rows="2"
+          maxlength="600"
+          :value="whenToUse"
+          :placeholder="__('So the assistant can pick this itself — e.g. “When the person asks for a product description or shop copy.”')"
+          @input="whenToUse = ($event.target as HTMLTextAreaElement).value"
+        ></textarea>
+        <p class="asdevs-ai-hint">
+          {{ __('Leave empty and the assistant only uses this skill when you pick it yourself.') }}
+        </p>
+      </div>
+
+      <div class="asdevs-ai-field">
+        <label class="asdevs-ai-label" for="asdevs-ai-skill-keywords">{{ __('Keywords') }}</label>
+        <input
+          id="asdevs-ai-skill-keywords"
+          class="asdevs-ai-input asdevs-ai-skills__input"
+          type="text"
+          maxlength="400"
+          :value="keywords"
+          :placeholder="__('Optional, comma separated — words people use for this, in any language')"
+          @input="keywords = ($event.target as HTMLInputElement).value"
         />
       </div>
 

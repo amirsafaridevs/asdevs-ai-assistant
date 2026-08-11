@@ -47,18 +47,46 @@ final class ChatRequest {
 	private string $model;
 
 	/**
+	 * JSON schema the answer must match, or null for free-form text.
+	 *
+	 * Set when an agent asks for structured output (the planner does). The
+	 * provider passes it to the model so the reply is machine-readable.
+	 *
+	 * @var array<string, mixed>|null
+	 */
+	private ?array $output_schema;
+
+	/**
+	 * Sampling temperature, or null to leave the provider default alone.
+	 *
+	 * @var float|null
+	 */
+	private ?float $temperature;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param string                           $system   System instructions.
-	 * @param array<int, array<string, mixed>> $messages Conversation messages.
-	 * @param array<int, array<string, mixed>> $tools    Tool definitions.
-	 * @param string                           $model    Provider model id, or empty for auto.
+	 * @param string                           $system        System instructions.
+	 * @param array<int, array<string, mixed>> $messages      Conversation messages.
+	 * @param array<int, array<string, mixed>> $tools         Tool definitions.
+	 * @param string                           $model         Provider model id, or empty for auto.
+	 * @param array<string, mixed>|null        $output_schema JSON schema for the answer, or null.
+	 * @param float|null                       $temperature   Sampling temperature, or null.
 	 */
-	public function __construct( string $system, array $messages, array $tools = array(), string $model = '' ) {
-		$this->system   = $system;
-		$this->messages = $messages;
-		$this->tools    = $tools;
-		$this->model    = $model;
+	public function __construct(
+		string $system,
+		array $messages,
+		array $tools = array(),
+		string $model = '',
+		?array $output_schema = null,
+		?float $temperature = null
+	) {
+		$this->system        = $system;
+		$this->messages      = $messages;
+		$this->tools         = $tools;
+		$this->model         = $model;
+		$this->output_schema = $output_schema;
+		$this->temperature   = $temperature;
 	}
 
 	/**
@@ -91,5 +119,21 @@ final class ChatRequest {
 	 */
 	public function model(): string {
 		return $this->model;
+	}
+
+	/**
+	 * JSON schema the answer must match, or null for free-form text.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	public function output_schema(): ?array {
+		return $this->output_schema;
+	}
+
+	/**
+	 * Sampling temperature, or null for the provider default.
+	 */
+	public function temperature(): ?float {
+		return $this->temperature;
 	}
 }

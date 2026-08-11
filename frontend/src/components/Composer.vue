@@ -23,6 +23,8 @@ const props = defineProps<{
   busy: boolean;
   skills?: Skill[];
   activeSkills?: string[];
+  /** Active skills the assistant chose for itself, marked so they read as its doing. */
+  autoSkills?: string[];
   models?: ModelInfo[];
   model?: string;
 }>();
@@ -58,6 +60,7 @@ const MAX_LINES = 4;
 
 const skills = computed(() => props.skills ?? []);
 const activeSkills = computed(() => props.activeSkills ?? []);
+const autoSkills = computed(() => props.autoSkills ?? []);
 const models = computed(() => props.models ?? []);
 const selectedModel = computed(() => props.model ?? 'auto');
 
@@ -586,9 +589,22 @@ defineExpose({
         :key="skill.slug"
         type="button"
         class="asdevs-ai-skill-chip"
-        :title="__('Remove skill')"
+        :class="{ 'is-auto': autoSkills.includes(skill.slug) }"
+        :title="autoSkills.includes(skill.slug) ? __('Chosen by the assistant — click to switch off') : __('Remove skill')"
         @click="emit('clear-skill', skill.slug)"
       >
+        <span
+          v-if="autoSkills.includes(skill.slug)"
+          class="asdevs-ai-skill-chip__auto"
+          :aria-label="__('Chosen by the assistant')"
+        >
+          <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true" focusable="false">
+            <path
+              d="m12 3 2.1 5.4L19.5 10.5 14.1 12.6 12 18l-2.1-5.4L4.5 10.5l5.4-2.1L12 3Z"
+              fill="currentColor"
+            />
+          </svg>
+        </span>
         <span class="asdevs-ai-skill-chip__slash">/{{ skill.slug }}</span>
         <span class="asdevs-ai-skill-chip__name">{{ skill.title }}</span>
         <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false">

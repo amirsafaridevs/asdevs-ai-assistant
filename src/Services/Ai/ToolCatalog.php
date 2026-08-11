@@ -59,6 +59,39 @@ final class ToolCatalog {
 			),
 			$this->call_api_tool( $mode ),
 			array(
+				'name'         => 'find_skills',
+				'description'  => 'Search the skills this site defines — reusable instructions written by the people who run it, describing how they want particular jobs done here. Pass what the person is actually trying to do, in their own words and their own language. Returns matching skills with a slug, a title, and when each one applies; it does NOT return the instructions themselves. Use it at the start of a task when the skill list in your briefing suggests something relevant might exist, then load what fits.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'query' => array(
+							'type'        => 'string',
+							'description' => 'What the person wants done, in their words. Include the subject and the action, for example "write a product description" or "publish the weekly newsletter".',
+						),
+						'limit' => array(
+							'type'        => 'integer',
+							'description' => 'How many matches to return. Default 5.',
+						),
+					),
+					'required'   => array( 'query' ),
+				),
+			),
+			array(
+				'name'         => 'load_skill',
+				'description'  => 'Load the full instructions for one or more skills by slug, and keep them active for the rest of this conversation. Use after find_skills, or straight from a slug in your briefing when the match is obvious. Load only what the task genuinely needs — at most a few — and follow what comes back for the work that follows. The person sees which skills are active and can switch them off.',
+				'input_schema' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'slugs' => array(
+							'type'        => 'array',
+							'items'       => array( 'type' => 'string' ),
+							'description' => 'Skill slugs to load, without the leading slash.',
+						),
+					),
+					'required'   => array( 'slugs' ),
+				),
+			),
+			array(
 				'name'         => 'memory_list',
 				'description'  => 'List every persistent memory row stored for this site (id, content, timestamps). Use when you need the full set or after writing/deleting.',
 				'input_schema' => array(

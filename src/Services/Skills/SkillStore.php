@@ -34,11 +34,71 @@ final class SkillStore {
 	private const MAX_DESCRIPTION = 400;
 
 	/**
+	 * Hard cap on the "when to use this" line the model reads.
+	 */
+	private const MAX_WHEN = 600;
+
+	/**
+	 * Hard cap on the keyword list.
+	 */
+	private const MAX_KEYWORDS = 400;
+
+	/**
+	 * How many skills one turn may load at once.
+	 */
+	private const MAX_LOADED = 5;
+
+	/**
+	 * Total characters of skill prompt one turn may pull into context.
+	 */
+	private const MAX_LOADED_CHARS = 24000;
+
+	/**
+	 * Meta key: when the model should reach for this skill.
+	 */
+	private const META_WHEN = '_asdevs_ai_when_to_use';
+
+	/**
+	 * Meta key: extra search terms and synonyms.
+	 */
+	private const META_KEYWORDS = '_asdevs_ai_keywords';
+
+	/**
+	 * Ranker used to answer the assistant's own skill searches.
+	 *
+	 * @var SkillMatcher
+	 */
+	private SkillMatcher $matcher;
+
+	/**
+	 * Skills for the life of this request, or null before the first read.
+	 *
+	 * One turn can search the catalogue and then load several slugs out of it;
+	 * that is one list, not four queries.
+	 *
+	 * @var array<int, array<string, mixed>>|null
+	 */
+	private ?array $cache = null;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param SkillMatcher|null $matcher Ranker.
+	 */
+	public function __construct( ?SkillMatcher $matcher = null ) {
+		$this->matcher = $matcher ?? new SkillMatcher();
+	}
+
+	/**
 	 * Every published skill, newest first.
 	 *
 	 * @return array<int, array<string, mixed>>
 	 */
 	public function all(): array {
+		if ( null !== $this->cache ) {
+			return $this->cache;
+		}
+
 		$posts = get_posts(
 			array(
 				'post_type'              => SkillPostType::POST_TYPE,
@@ -47,7 +107,6 @@ final class SkillStore {
 				'orderby'                => 'modified',
 				'order'                  => 'DESC',
 				'no_found_rows'          => true,
-				'update_post_meta_cache' => false,
 				'update_post_term_cache' => false,
 			)
 		);
@@ -62,7 +121,128 @@ final class SkillStore {
 			}
 		}
 
-		return $items;
+		/**
+		 * Filter the skills the assistant can see.
+		 *
+		 * The seam other plugins will register their own skills through. Rows
+		 * must match the shape returned here: id, title, slug, prompt,
+		 * description, when_to_use, keywords.
+		 *
+		 * @param array<int, array<string, mixed>> $items Stored skills.
+		 */
+		$items = (array) apply_filters( 'asdevs_ai_assistant_skills', $items );
+
+		$this->cache = array_values( array_filter( $items, 'is_array' ) );
+
+		return $this->cache;
+	}
+
+	/**
+	 * Skills that match a natural-language query, ranked, without prompt bodies.
+	 *
+	 * This is what the assistant's own search tool answers with: enough for the
+	 * model to choose, never so much that browsing costs as much as loading.
+	 *
+	 * @param string $query What the person is trying to do.
+	 * @param int    $limit How many to return.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function search( string $query, int $limit = 5 ): array {
+		$matches = $this->matcher->rank( $this->all(), $query, $limit );
+		$rows    = array();
+
+		foreach ( $matches as $match ) {
+			$rows[] = array(
+				'slug'        => (string) $match['slug'],
+				'title'       => (string) $match['title'],
+				'description' => (string) ( $match['description'] ?? '' ),
+				'when_to_use' => (string) ( $match['when_to_use'] ?? '' ),
+				'score'       => (float) ( $match['score'] ?? 0 ),
+				'matched_on'  => array_values( (array) ( $match['matched_on'] ?? array() ) ),
+			);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Full prompts for the skills the assistant chose to load.
+	 *
+	 * Capped in both count and characters: a model that asks for everything
+	 * gets the first few, and is told plainly that the rest were left out.
+	 *
+	 * @param array<int, string> $slugs Skill slugs the model asked for.
+	 *
+	 * @return array{loaded: array<int, array<string, mixed>>, missing: array<int, string>, skipped: array<int, string>}
+	 */
+	public function load( array $slugs ): array {
+		$loaded  = array();
+		$missing = array();
+		$skipped = array();
+		$seen    = array();
+		$budget  = self::MAX_LOADED_CHARS;
+
+		foreach ( $slugs as $raw ) {
+			$slug = $this->normalize_slug( (string) $raw );
+
+			if ( '' === $slug || isset( $seen[ $slug ] ) ) {
+				continue;
+			}
+
+			$seen[ $slug ] = true;
+			$skill         = $this->find( $slug );
+
+			if ( null === $skill ) {
+				$missing[] = $slug;
+				continue;
+			}
+
+			$prompt = (string) $skill['prompt'];
+
+			if ( count( $loaded ) >= self::MAX_LOADED || strlen( $prompt ) > $budget ) {
+				$skipped[] = $slug;
+				continue;
+			}
+
+			$budget -= strlen( $prompt );
+
+			$loaded[] = array(
+				'slug'        => (string) $skill['slug'],
+				'title'       => (string) $skill['title'],
+				'description' => (string) ( $skill['description'] ?? '' ),
+				'prompt'      => $prompt,
+			);
+		}
+
+		return array(
+			'loaded'  => $loaded,
+			'missing' => $missing,
+			'skipped' => $skipped,
+		);
+	}
+
+	/**
+	 * One skill by slug, including any registered by other plugins.
+	 *
+	 * @param string $slug Skill slug.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	public function find( string $slug ): ?array {
+		$slug = $this->normalize_slug( $slug );
+
+		if ( '' === $slug ) {
+			return null;
+		}
+
+		foreach ( $this->all() as $skill ) {
+			if ( (string) ( $skill['slug'] ?? '' ) === $slug ) {
+				return $skill;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -132,6 +312,8 @@ final class SkillStore {
 		$slug_raw    = isset( $data['slug'] ) ? (string) $data['slug'] : '';
 		$prompt      = isset( $data['prompt'] ) ? trim( (string) $data['prompt'] ) : '';
 		$description = isset( $data['description'] ) ? sanitize_text_field( (string) $data['description'] ) : '';
+		$when        = isset( $data['when_to_use'] ) ? sanitize_textarea_field( (string) $data['when_to_use'] ) : '';
+		$keywords    = $this->normalize_keywords( $data['keywords'] ?? '' );
 
 		if ( '' === $title ) {
 			return new \WP_Error(
@@ -155,6 +337,14 @@ final class SkillStore {
 
 		if ( strlen( $description ) > self::MAX_DESCRIPTION ) {
 			$description = substr( $description, 0, self::MAX_DESCRIPTION );
+		}
+
+		if ( strlen( $when ) > self::MAX_WHEN ) {
+			$when = substr( $when, 0, self::MAX_WHEN );
+		}
+
+		if ( strlen( $keywords ) > self::MAX_KEYWORDS ) {
+			$keywords = substr( $keywords, 0, self::MAX_KEYWORDS );
 		}
 
 		$slug = $this->normalize_slug( '' !== $slug_raw ? $slug_raw : $title );
@@ -231,6 +421,11 @@ final class SkillStore {
 			return $result;
 		}
 
+		update_post_meta( (int) $result, self::META_WHEN, $when );
+		update_post_meta( (int) $result, self::META_KEYWORDS, $keywords );
+
+		$this->cache = null;
+
 		$saved = $this->get( (int) $result );
 
 		if ( null === $saved ) {
@@ -262,7 +457,8 @@ final class SkillStore {
 			);
 		}
 
-		$deleted = wp_delete_post( $id, true );
+		$deleted     = wp_delete_post( $id, true );
+		$this->cache = null;
 
 		if ( ! $deleted instanceof \WP_Post ) {
 			return new \WP_Error(
@@ -294,7 +490,7 @@ final class SkillStore {
 			}
 
 			$seen[ $slug ] = true;
-			$skill         = $this->get_by_slug( $slug );
+			$skill         = $this->find( $slug );
 
 			if ( null === $skill ) {
 				continue;
@@ -312,6 +508,9 @@ final class SkillStore {
 
 	/**
 	 * Compact listing for the system prompt catalogue.
+	 *
+	 * Names and trigger lines only — never prompt bodies. This is the index the
+	 * model reads on every turn to decide whether searching is worth a call.
 	 */
 	public function catalogue_for_prompt(): string {
 		$items = $this->all();
@@ -323,11 +522,16 @@ final class SkillStore {
 		$lines = array();
 
 		foreach ( $items as $item ) {
-			$desc = (string) ( $item['description'] ?? '' );
+			$hint = trim( (string) ( $item['when_to_use'] ?? '' ) );
+
+			if ( '' === $hint ) {
+				$hint = trim( (string) ( $item['description'] ?? '' ) );
+			}
+
 			$line = sprintf( '- /%s — %s', (string) $item['slug'], (string) $item['title'] );
 
-			if ( '' !== $desc ) {
-				$line .= ': ' . $desc;
+			if ( '' !== $hint ) {
+				$line .= ': ' . $hint;
 			}
 
 			$lines[] = $line;
@@ -378,9 +582,40 @@ final class SkillStore {
 			'slug'        => $slug,
 			'prompt'      => $prompt,
 			'description' => trim( wp_strip_all_tags( (string) $post->post_excerpt ) ),
+			'when_to_use' => trim( (string) get_post_meta( $post->ID, self::META_WHEN, true ) ),
+			'keywords'    => trim( (string) get_post_meta( $post->ID, self::META_KEYWORDS, true ) ),
 			'created_at'  => strtotime( (string) $post->post_date_gmt ) ?: time(),
 			'updated_at'  => strtotime( (string) $post->post_modified_gmt ) ?: time(),
 		);
+	}
+
+	/**
+	 * Flatten a keyword list from either a comma string or an array.
+	 *
+	 * @param mixed $value Raw keywords.
+	 */
+	private function normalize_keywords( $value ): string {
+		if ( is_array( $value ) ) {
+			$value = implode( ', ', array_map( 'strval', $value ) );
+		}
+
+		$parts = preg_split( '/[,\n]+/u', (string) $value );
+
+		if ( ! is_array( $parts ) ) {
+			return '';
+		}
+
+		$terms = array();
+
+		foreach ( $parts as $part ) {
+			$term = sanitize_text_field( trim( (string) $part ) );
+
+			if ( '' !== $term ) {
+				$terms[] = $term;
+			}
+		}
+
+		return implode( ', ', array_slice( $terms, 0, 30 ) );
 	}
 
 	/**

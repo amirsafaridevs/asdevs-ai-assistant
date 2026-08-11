@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { __, sprintf } from '../api';
 import { processAssistantMarkdown } from '../markdown';
 import type { Bubble, MessageAttachment } from '../types';
+import AgentBoot from './AgentBoot.vue';
 import Timeline from './Timeline.vue';
 
 const props = defineProps<{
@@ -80,6 +81,9 @@ const status = computed(() => {
 
   return props.bubble.text.trim() !== '' ? __('Writing…') : __('Working…');
 });
+
+/** The engine is still downloading; the skeleton stands in for the answer. */
+const showBoot = computed(() => props.live === true && props.bubble.booting === true && !props.bubble.error);
 
 const showTyping = computed(() => props.live === true && !props.bubble.error);
 
@@ -342,7 +346,9 @@ watch(
       <pre v-if="showDetail" class="asdevs-ai-notice__detail">{{ bubble.error.detail }}</pre>
     </div>
 
-    <div v-if="showTyping" class="asdevs-ai-typing" role="status" :aria-label="status">
+    <AgentBoot v-if="showBoot" />
+
+    <div v-else-if="showTyping" class="asdevs-ai-typing" role="status" :aria-label="status">
       <span class="asdevs-ai-typing__dots" aria-hidden="true">
         <i></i><i></i><i></i>
       </span>

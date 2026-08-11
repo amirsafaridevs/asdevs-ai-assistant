@@ -868,6 +868,123 @@
   opacity: 0.88;
 }
 
+/* --------------------------------------------- agent engine loading state */
+
+/*
+ * Shaped like the answer it is about to become, so nothing shifts when the
+ * real text arrives. One slow sweep, no spinner, no fake progress bar.
+ */
+
+.asdevs-ai-boot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-block: 4px 12px;
+  animation: asdevs-ai-fade-in 260ms var(--asdevs-ai-ease);
+}
+
+.asdevs-ai-boot__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.asdevs-ai-boot__line {
+  position: relative;
+  display: block;
+  block-size: 9px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--asdevs-ai-canvas-deep);
+}
+
+/*
+ * The sheen is a separate layer moved with transform. Animating the gradient's
+ * background-position would repaint each bar on every frame; a translated
+ * overlay stays on the compositor.
+ */
+.asdevs-ai-boot__line::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 60%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--asdevs-ai-accent-soft) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: asdevs-ai-boot-sweep 1600ms var(--asdevs-ai-ease) infinite;
+  will-change: transform;
+}
+
+/* Uneven widths read as sentences; three equal bars read as a loading bar. */
+.asdevs-ai-boot__line:nth-child(1) {
+  inline-size: 46%;
+}
+
+.asdevs-ai-boot__line:nth-child(2) {
+  inline-size: 82%;
+}
+
+.asdevs-ai-boot__line:nth-child(2)::after {
+  animation-delay: 140ms;
+}
+
+.asdevs-ai-boot__line:nth-child(3) {
+  inline-size: 62%;
+}
+
+.asdevs-ai-boot__line:nth-child(3)::after {
+  animation-delay: 280ms;
+}
+
+.asdevs-ai-boot__label {
+  margin: 0;
+  color: var(--asdevs-ai-muted);
+  font-size: 11.5px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  opacity: 0.9;
+}
+
+@keyframes asdevs-ai-boot-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(280%);
+  }
+}
+
+/* The sweep reads with the text, so it mirrors for right-to-left. */
+[dir="rtl"] .asdevs-ai-boot__line::after {
+  animation-name: asdevs-ai-boot-sweep-rtl;
+}
+
+@keyframes asdevs-ai-boot-sweep-rtl {
+  from {
+    transform: translateX(280%);
+  }
+
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/*
+ * Motion is switched off globally for reduced-motion, which would strand the
+ * sheen mid-bar. Hide it and leave the bars resting.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .asdevs-ai-boot__line::after {
+    display: none;
+  }
+}
+
 /* ------------------------------------------------- notices and confirmation */
 
 .asdevs-ai-notice {
@@ -1128,6 +1245,14 @@
 
 .asdevs-ai-field {
   margin-block-end: 16px;
+}
+
+.asdevs-ai-hint {
+  margin-block-start: 6px;
+  margin-block-end: 0;
+  color: var(--asdevs-ai-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .asdevs-ai-label {
@@ -1407,6 +1532,18 @@
 .asdevs-ai-skill-chip:hover,
 .asdevs-ai-skill-chip:focus-visible {
   border-color: var(--asdevs-ai-accent);
+}
+
+/* The assistant picked this one itself — softer, so a pinned skill still reads as the person's. */
+.asdevs-ai-skill-chip.is-auto {
+  border-style: dashed;
+  background: transparent;
+}
+
+.asdevs-ai-skill-chip__auto {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.75;
 }
 
 .asdevs-ai-skill-chip__slash {

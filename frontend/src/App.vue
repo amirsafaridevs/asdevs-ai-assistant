@@ -319,6 +319,7 @@ function onEscape(): void {
               :busy="state.busy"
               :skills="state.skills"
               :active-skills="state.activeSkills"
+              :auto-skills="state.autoSkills"
               :models="state.models"
               :model="state.model"
               @submit="submit"

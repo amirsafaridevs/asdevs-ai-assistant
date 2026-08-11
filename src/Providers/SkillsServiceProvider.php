@@ -10,6 +10,8 @@ declare( strict_types=1 );
 namespace ASDevs\AIAssistant\Providers;
 
 use ASDevs\AIAssistant\Core\ServiceProvider;
+use ASDevs\AIAssistant\Core\Container;
+use ASDevs\AIAssistant\Services\Skills\SkillMatcher;
 use ASDevs\AIAssistant\Services\Skills\SkillPostType;
 use ASDevs\AIAssistant\Services\Skills\SkillStore;
 
@@ -27,7 +29,11 @@ final class SkillsServiceProvider extends ServiceProvider {
 	 */
 	public function register(): void {
 		$this->container->singleton( SkillPostType::class, static fn() => new SkillPostType() );
-		$this->container->singleton( SkillStore::class, static fn() => new SkillStore() );
+		$this->container->singleton( SkillMatcher::class, static fn() => new SkillMatcher() );
+		$this->container->singleton(
+			SkillStore::class,
+			static fn( Container $container ) => new SkillStore( $container->get( SkillMatcher::class ) )
+		);
 	}
 
 	/**

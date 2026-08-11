@@ -236,6 +236,17 @@ function apply_filters( string $hook_name, $value ) {
 	return $value;
 }
 
+/**
+ * Strip tags the way core does, for the parts that only need the text.
+ *
+ * @param string $text Raw text.
+ */
+function wp_strip_all_tags( string $text ): string {
+	$text = (string) preg_replace( '@<(script|style)[^>]*?>.*?</\\1>@si', '', $text );
+
+	return trim( strip_tags( $text ) );
+}
+
 // phpcs:enable
 
 spl_autoload_register(

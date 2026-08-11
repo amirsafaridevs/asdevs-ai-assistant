@@ -23,12 +23,13 @@ use ASDevs\AIAssistant\Services\Execution\ActionExecutor;
 use ASDevs\AIAssistant\Services\Legal\Terms;
 use ASDevs\AIAssistant\Services\Memory\MemoryStore;
 use ASDevs\AIAssistant\Http\Controllers\ActionController;
+use ASDevs\AIAssistant\Http\Controllers\AgentBriefingController;
 use ASDevs\AIAssistant\Http\Controllers\BootstrapController;
 use ASDevs\AIAssistant\Http\Controllers\CapabilityController;
-use ASDevs\AIAssistant\Http\Controllers\ChatController;
 use ASDevs\AIAssistant\Http\Controllers\ConversationController;
 use ASDevs\AIAssistant\Http\Controllers\Controller;
 use ASDevs\AIAssistant\Http\Controllers\MemoryController;
+use ASDevs\AIAssistant\Http\Controllers\OpenAiCompatController;
 use ASDevs\AIAssistant\Http\Controllers\SettingsController;
 use ASDevs\AIAssistant\Http\Controllers\SkillsController;
 use ASDevs\AIAssistant\Http\Controllers\TermsController;
@@ -74,9 +75,15 @@ final class RestApiServiceProvider extends ServiceProvider {
 		);
 
 		$this->container->singleton(
-			ChatController::class,
-			static fn( Container $container ) => new ChatController(
-				$container->get( ProviderRegistry::class ),
+			OpenAiCompatController::class,
+			static fn( Container $container ) => new OpenAiCompatController(
+				$container->get( ProviderRegistry::class )
+			)
+		);
+
+		$this->container->singleton(
+			AgentBriefingController::class,
+			static fn( Container $container ) => new AgentBriefingController(
 				$container->get( SystemPrompt::class ),
 				$container->get( ToolCatalog::class ),
 				$container->get( SkillStore::class )
@@ -136,7 +143,8 @@ final class RestApiServiceProvider extends ServiceProvider {
 			TermsController::class,
 			CapabilityController::class,
 			ActionController::class,
-			ChatController::class,
+			OpenAiCompatController::class,
+			AgentBriefingController::class,
 			ConversationController::class,
 			SettingsController::class,
 			MemoryController::class,
