@@ -37,6 +37,37 @@ final class AssetServiceProvider extends ServiceProvider {
 	public function boot(): void {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 		add_action( 'admin_footer', array( $this, 'render_root' ) );
+		add_filter( 'script_loader_tag', array( $this, 'as_module' ), 10, 2 );
+	}
+
+	/**
+	 * Serve the widget as an ES module.
+	 *
+	 * The bundle is a module so the agent engine can live in a separate chunk
+	 * that is only fetched when someone opens the assistant. A classic script
+	 * cannot be code-split, and cannot use the dynamic import that defers it.
+	 *
+	 * Modules are deferred by the browser, so the inline data written before the
+	 * tag still runs first.
+	 *
+	 * @param string $tag    The script tag.
+	 * @param string $handle Script handle.
+	 */
+	public function as_module( string $tag, string $handle ): string {
+		if ( self::HANDLE !== $handle ) {
+			return $tag;
+		}
+
+		if ( false !== strpos( $tag, ' type="module"' ) ) {
+			return $tag;
+		}
+
+		// Replace an explicit type when WordPress wrote one, otherwise add it.
+		if ( false !== strpos( $tag, ' type="text/javascript"' ) ) {
+			return str_replace( ' type="text/javascript"', ' type="module"', $tag );
+		}
+
+		return str_replace( '<script ', '<script type="module" ', $tag );
 	}
 
 	/**

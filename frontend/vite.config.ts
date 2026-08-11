@@ -32,9 +32,10 @@ export default defineConfig({
         format: 'es',
         assetFileNames: 'main.css',
         entryFileNames: 'main.js',
-        // One deferred chunk, under a stable name so the version stamp and any
-        // cache rule on the PHP side keep working.
-        chunkFileNames: 'agent-engine.js',
+        // Deferred chunks are content-hashed. Only main.js is named by the PHP
+        // side; these are reached through the module graph, so a hash is both
+        // safe and the better cache key.
+        chunkFileNames: 'agent-[hash].js',
       },
     },
   },
