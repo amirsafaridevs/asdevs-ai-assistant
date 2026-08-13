@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { __, boot } from './api';
 import {
   acceptTerms,
@@ -27,11 +27,44 @@ import LogoMark from './components/LogoMark.vue';
 import MessageBubble from './components/MessageBubble.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import SkillsPanel from './components/SkillsPanel.vue';
+import StartSkeleton from './components/StartSkeleton.vue';
+import SvgLoader from './components/SvgLoader.vue';
 import TermsGate from './components/TermsGate.vue';
 
 const draft = ref('');
 const log = ref<HTMLElement | null>(null);
 const composer = ref<InstanceType<typeof Composer> | null>(null);
+
+/** FAB shows the dual-ring spinner for at least 3s (and until window load). */
+const launcherReady = ref(false);
+const LAUNCHER_MIN_MS = 3000;
+let launcherTimer = 0;
+
+onMounted(() => {
+  const waitMin = new Promise<void>((resolve) => {
+    launcherTimer = window.setTimeout(resolve, LAUNCHER_MIN_MS);
+  });
+
+  const waitLoad = new Promise<void>((resolve) => {
+    if (document.readyState === 'complete') {
+      resolve();
+
+      return;
+    }
+
+    window.addEventListener('load', () => resolve(), { once: true });
+  });
+
+  void Promise.all([waitMin, waitLoad]).then(() => {
+    launcherReady.value = true;
+  });
+});
+
+onUnmounted(() => {
+  if (launcherTimer) {
+    window.clearTimeout(launcherTimer);
+  }
+});
 
 const empty = computed(() => state.bubbles.length === 0);
 const lastSteps = computed(() => state.bubbles[state.bubbles.length - 1]?.steps?.length ?? 0);
@@ -64,8 +97,6 @@ const headerTitle = computed(() => {
 
   return __('Assistant');
 });
-
-void load();
 
 watch(
   () => [state.bubbles.length, lastSteps.value, state.bubbles[state.bubbles.length - 1]?.text, state.busy],
@@ -136,10 +167,14 @@ function onEscape(): void {
       v-if="!state.open"
       type="button"
       class="asdevs-ai-launcher"
-      :aria-label="__('Open the assistant')"
+      :class="{ 'asdevs-ai-launcher--loading': !launcherReady }"
+      :aria-label="launcherReady ? __('Open the assistant') : __('Loading the assistant')"
+      :aria-busy="launcherReady ? undefined : 'true'"
+      :disabled="!launcherReady"
       @click="open()"
     >
-      <LogoMark :size="28" bold />
+      <SvgLoader v-if="!launcherReady" :size="36" />
+      <LogoMark v-else :size="28" bold />
     </button>
 
     <section
@@ -277,9 +312,16 @@ function onEscape(): void {
             <div v-if="empty" class="asdevs-ai-start">
               <p class="asdevs-ai-start__eyebrow">{{ __('Assistant') }}</p>
               <p class="asdevs-ai-start__question">{{ __('What would you like to do on your site today?') }}</p>
-              <ul class="asdevs-ai-start__list">
+              <StartSkeleton v-if="state.loading && state.suggestions.length === 0" />
+              <ul v-else class="asdevs-ai-start__list">
                 <li v-for="suggestion in state.suggestions" :key="suggestion.prompt">
-                  <button type="button" class="asdevs-ai-chip" @click="send(suggestion.prompt)">
+                  <button
+                    type="button"
+                    class="asdevs-ai-chip"
+                    :disabled="!state.engineReady"
+                    :aria-busy="!state.engineReady"
+                    @click="send(suggestion.prompt)"
+                  >
                     <span class="asdevs-ai-chip__label">{{ suggestion.label }}</span>
                     <svg class="asdevs-ai-chip__arrow" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
                       <path d="M5 12h12M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
@@ -317,6 +359,8 @@ function onEscape(): void {
               ref="composer"
               v-model="draft"
               :busy="state.busy"
+              :engine-ready="state.engineReady"
+              :engine-error="state.engineError"
               :skills="state.skills"
               :active-skills="state.activeSkills"
               :auto-skills="state.autoSkills"

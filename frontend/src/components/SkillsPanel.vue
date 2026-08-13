@@ -3,6 +3,8 @@ import { computed, ref, watch } from 'vue';
 import { __, sprintf } from '../api';
 import { removeSkill, saveSkill, state } from '../assistant';
 import type { Skill } from '../types';
+import { usePanelHold } from '../usePanelHold';
+import PanelSkeleton from './PanelSkeleton.vue';
 
 type Screen = 'list' | 'form';
 
@@ -17,9 +19,15 @@ const prompt = ref('');
 const busy = ref(false);
 const error = ref('');
 const slugTouched = ref(false);
+const holdDone = usePanelHold();
 
 const skills = computed(() => state.skills);
 const isEditing = computed(() => editingId.value !== null);
+
+/** Skeleton on the list until the min hold ends, and while the first fetch is empty. */
+const showSkeleton = computed(
+  () => screen.value === 'list' && (!holdDone.value || (state.skillsBusy && skills.value.length === 0))
+);
 
 watch(
   () => state.view,
@@ -151,10 +159,14 @@ async function destroy(skill: Skill): Promise<void> {
 
 <template>
   <div class="asdevs-ai-settings asdevs-ai-skills">
-    <template v-if="screen === 'list'">
-      <p v-if="state.skillsBusy && skills.length === 0" class="asdevs-ai-skills__status">{{ __('Loading…') }}</p>
+    <PanelSkeleton
+      v-if="showSkeleton"
+      variant="skills"
+      :label="__('Loading skills')"
+    />
 
-      <p v-else-if="state.skillsError && skills.length === 0" class="asdevs-ai-note asdevs-ai-note--bad">
+    <template v-else-if="screen === 'list'">
+      <p v-if="state.skillsError && skills.length === 0" class="asdevs-ai-note asdevs-ai-note--bad">
         {{ state.skillsError }}
       </p>
 
@@ -265,7 +277,22 @@ async function destroy(skill: Skill): Promise<void> {
       </div>
 
       <div class="asdevs-ai-field">
-        <label class="asdevs-ai-label" for="asdevs-ai-skill-desc">{{ __('Short description') }}</label>
+        <div class="asdevs-ai-label-row">
+          <label class="asdevs-ai-label" for="asdevs-ai-skill-desc">{{ __('Short description') }}</label>
+          <span class="asdevs-ai-help">
+            <button
+              type="button"
+              class="asdevs-ai-help__btn"
+              aria-describedby="asdevs-ai-skill-desc-help"
+              :aria-label="__('About Short description')"
+            >
+              ?
+            </button>
+            <span id="asdevs-ai-skill-desc-help" class="asdevs-ai-help__tip" role="tooltip">
+              {{ __('A one-line summary shown in the skills list.') }}
+            </span>
+          </span>
+        </div>
         <input
           id="asdevs-ai-skill-desc"
           class="asdevs-ai-input asdevs-ai-skills__input"
@@ -278,44 +305,86 @@ async function destroy(skill: Skill): Promise<void> {
       </div>
 
       <div class="asdevs-ai-field">
-        <label class="asdevs-ai-label" for="asdevs-ai-skill-when">{{ __('When to use this') }}</label>
+        <div class="asdevs-ai-label-row">
+          <label class="asdevs-ai-label" for="asdevs-ai-skill-when">{{ __('When to use this') }}</label>
+          <span class="asdevs-ai-help">
+            <button
+              type="button"
+              class="asdevs-ai-help__btn"
+              aria-describedby="asdevs-ai-skill-when-help"
+              :aria-label="__('About When to use this')"
+            >
+              ?
+            </button>
+            <span id="asdevs-ai-skill-when-help" class="asdevs-ai-help__tip" role="tooltip">
+              {{ __('Tell the assistant when to pick this itself. Leave empty and it only runs when you choose it.') }}
+            </span>
+          </span>
+        </div>
         <textarea
           id="asdevs-ai-skill-when"
-          class="asdevs-ai-input asdevs-ai-skills__input"
-          rows="2"
+          class="asdevs-ai-input asdevs-ai-skills__input asdevs-ai-skills__area"
+          rows="3"
           maxlength="600"
           :value="whenToUse"
-          :placeholder="__('So the assistant can pick this itself — e.g. “When the person asks for a product description or shop copy.”')"
+          :placeholder="__('Optional')"
           @input="whenToUse = ($event.target as HTMLTextAreaElement).value"
         ></textarea>
-        <p class="asdevs-ai-hint">
-          {{ __('Leave empty and the assistant only uses this skill when you pick it yourself.') }}
-        </p>
       </div>
 
       <div class="asdevs-ai-field">
-        <label class="asdevs-ai-label" for="asdevs-ai-skill-keywords">{{ __('Keywords') }}</label>
+        <div class="asdevs-ai-label-row">
+          <label class="asdevs-ai-label" for="asdevs-ai-skill-keywords">{{ __('Keywords') }}</label>
+          <span class="asdevs-ai-help">
+            <button
+              type="button"
+              class="asdevs-ai-help__btn"
+              aria-describedby="asdevs-ai-skill-keywords-help"
+              :aria-label="__('About Keywords')"
+            >
+              ?
+            </button>
+            <span id="asdevs-ai-skill-keywords-help" class="asdevs-ai-help__tip" role="tooltip">
+              {{ __('Comma-separated words people might use for this, in any language.') }}
+            </span>
+          </span>
+        </div>
         <input
           id="asdevs-ai-skill-keywords"
           class="asdevs-ai-input asdevs-ai-skills__input"
           type="text"
           maxlength="400"
           :value="keywords"
-          :placeholder="__('Optional, comma separated — words people use for this, in any language')"
+          :placeholder="__('Optional')"
           @input="keywords = ($event.target as HTMLInputElement).value"
         />
       </div>
 
       <div class="asdevs-ai-field">
-        <label class="asdevs-ai-label" for="asdevs-ai-skill-prompt">{{ __('Prompt') }}</label>
+        <div class="asdevs-ai-label-row">
+          <label class="asdevs-ai-label" for="asdevs-ai-skill-prompt">{{ __('Prompt') }}</label>
+          <span class="asdevs-ai-help">
+            <button
+              type="button"
+              class="asdevs-ai-help__btn"
+              aria-describedby="asdevs-ai-skill-prompt-help"
+              :aria-label="__('About Prompt')"
+            >
+              ?
+            </button>
+            <span id="asdevs-ai-skill-prompt-help" class="asdevs-ai-help__tip" role="tooltip">
+              {{ __('Instructions the assistant should follow while this skill is active.') }}
+            </span>
+          </span>
+        </div>
         <textarea
           id="asdevs-ai-skill-prompt"
-          class="asdevs-ai-input asdevs-ai-skills__input asdevs-ai-skills__prompt"
-          rows="8"
+          class="asdevs-ai-input asdevs-ai-skills__input asdevs-ai-skills__area asdevs-ai-skills__area--prompt"
+          rows="6"
           maxlength="8000"
           :value="prompt"
           required
-          :placeholder="__('Instructions the assistant should follow while this skill is active…')"
+          :placeholder="__('Write the skill instructions…')"
           @input="prompt = ($event.target as HTMLTextAreaElement).value"
         ></textarea>
       </div>

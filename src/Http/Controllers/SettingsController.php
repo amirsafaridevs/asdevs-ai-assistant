@@ -102,24 +102,13 @@ final class SettingsController extends Controller {
 	/**
 	 * Only a site administrator may see or change the connector preference.
 	 *
+	 * Terms acceptance is not required here — choosing a connector is part of
+	 * site setup and can happen before the assistant chat is first opened.
+	 *
 	 * @return bool|WP_Error
 	 */
 	public function check_admin_permission() {
-		$allowed = $this->check_terms_permission();
-
-		if ( is_wp_error( $allowed ) ) {
-			return $allowed;
-		}
-
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return new WP_Error(
-				'asdevs_ai_not_allowed',
-				__( 'Only a site administrator can choose the AI connector.', 'asdevs-ai-assistant' ),
-				array( 'status' => rest_authorization_required_code() )
-			);
-		}
-
-		return true;
+		return $this->check_permission();
 	}
 
 	/**

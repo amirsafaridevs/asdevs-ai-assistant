@@ -1,35 +1,81 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { __ } from '../api';
-import { chooseProvider, saveSettings, state, testConnector } from '../assistant';
+import { chooseProvider, state, testConnector } from '../assistant';
+import { usePanelHold } from '../usePanelHold';
+import DotsLoader from './DotsLoader.vue';
+import PanelSkeleton from './PanelSkeleton.vue';
+
+type Toast = {
+  ok: boolean;
+  title: string;
+};
 
 const settings = computed(() => state.settings);
-const testing = ref(false);
-const testMessage = ref('');
-const testOk = ref<boolean | null>(null);
+const testingId = ref('');
+const toast = ref<Toast | null>(null);
+const holdDone = usePanelHold();
 
-const selected = computed(() =>
-  settings.value?.providers.find((item) => item.id === settings.value?.provider) ?? null
+/** Skeleton until the min hold ends, and while the first fetch has no payload yet. */
+const showSkeleton = computed(() => !holdDone.value || (state.settingsBusy && !settings.value));
+
+/** Dim the list while saving or testing — settings payload is already on screen. */
+const listBusy = computed(
+  () => Boolean(settings.value) && (state.settingsBusy || testingId.value !== '')
 );
 
-async function runTest(): Promise<void> {
-  if (!settings.value || testing.value) {
+async function selectProvider(id: string): Promise<void> {
+  if (!settings.value || listBusy.value || id === settings.value.provider) {
     return;
   }
 
-  testing.value = true;
-  testMessage.value = '';
-  testOk.value = null;
+  toast.value = null;
+  await chooseProvider(id);
+
+  if (!settings.value) {
+    return;
+  }
+
+  if (state.settingsError) {
+    toast.value = {
+      ok: false,
+      title: state.settingsError,
+    };
+    return;
+  }
+
+  if (state.settingsSaved) {
+    toast.value = {
+      ok: settings.value.ready,
+      title: settings.value.ready ? __('Settings saved') : __('Saved — one step left'),
+    };
+  }
+}
+
+async function runTest(providerId: string, event: Event): Promise<void> {
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (!settings.value || listBusy.value || testingId.value) {
+    return;
+  }
+
+  testingId.value = providerId;
+  toast.value = null;
 
   try {
-    const result = await testConnector(settings.value.provider);
-    testOk.value = result.ok;
-    testMessage.value = result.message;
+    const result = await testConnector(providerId);
+    toast.value = {
+      ok: result.ok,
+      title: result.ok ? __('Connection works') : result.message,
+    };
   } catch (error) {
-    testOk.value = false;
-    testMessage.value = (error as Error).message;
+    toast.value = {
+      ok: false,
+      title: (error as Error).message,
+    };
   } finally {
-    testing.value = false;
+    testingId.value = '';
   }
 }
 </script>
@@ -40,69 +86,114 @@ async function runTest(): Promise<void> {
     WordPress AI connector the assistant should prefer, and can probe it.
   -->
   <div class="asdevs-ai-settings">
-    <p v-if="state.settingsBusy && !settings" class="asdevs-ai-note">{{ __('Loading…') }}</p>
+    <PanelSkeleton
+      v-if="showSkeleton"
+      variant="settings"
+      :label="__('Loading settings')"
+    />
 
-    <form v-else-if="settings" @submit.prevent="saveSettings()">
-      <p class="asdevs-ai-note">
-        {{ __('API keys are managed in WordPress under Settings → Connectors. Choose which connector this assistant should use.') }}
-      </p>
+    <div v-else-if="settings" class="asdevs-ai-settings__body">
+      <header class="asdevs-ai-settings__head">
+        <h3 class="asdevs-ai-settings__title">{{ __('AI connector') }}</h3>
+      </header>
 
-      <p v-if="settings.providers.length === 0" class="asdevs-ai-note asdevs-ai-note--bad">
-        {{ __('No AI provider plugins are active yet. Install one from Connectors first.') }}
-      </p>
-
-      <div v-else class="asdevs-ai-field">
-        <label class="asdevs-ai-label" for="asdevs-ai-provider">{{ __('WordPress connector') }}</label>
-        <select
-          id="asdevs-ai-provider"
-          class="asdevs-ai-input"
-          :value="settings.provider"
-          @change="chooseProvider(($event.target as HTMLSelectElement).value); testMessage = ''; testOk = null"
-        >
-          <option v-for="item in settings.providers" :key="item.id" :value="item.id">
-            {{ item.configured ? item.label : `${item.label} (${__('not configured')})` }}
-          </option>
-        </select>
-      </div>
-
-      <p v-if="selected && !selected.configured" class="asdevs-ai-note asdevs-ai-note--bad">
-        {{ __('This connector still needs an API key.') }}
-        <a class="asdevs-ai-link" :href="settings.connectors_url">{{ __('Open Connectors') }}</a>
-      </p>
-
-      <p v-if="state.settingsError" class="asdevs-ai-note asdevs-ai-note--bad">{{ state.settingsError }}</p>
-      <p v-else-if="state.settingsSaved" class="asdevs-ai-note asdevs-ai-note--good">
-        {{ settings.ready ? __('Saved. The assistant is ready.') : __('Saved, but the connector still needs a key.') }}
-      </p>
-
-      <p
-        v-if="testMessage"
-        class="asdevs-ai-note"
-        :class="testOk ? 'asdevs-ai-note--good' : 'asdevs-ai-note--bad'"
+      <div
+        v-if="toast"
+        class="asdevs-ai-settings__toast"
+        :class="toast.ok ? 'asdevs-ai-settings__toast--success' : 'asdevs-ai-settings__toast--warning'"
+        role="status"
+        aria-live="polite"
       >
-        {{ testMessage }}
-      </p>
-
-      <div class="asdevs-ai-settings__actions">
-        <button
-          type="submit"
-          class="asdevs-ai-btn asdevs-ai-btn--primary"
-          :disabled="state.settingsBusy || settings.providers.length === 0"
-        >
-          {{ state.settingsBusy ? __('Saving…') : __('Save') }}
-        </button>
-        <button
-          type="button"
-          class="asdevs-ai-btn"
-          :disabled="testing || !settings.provider || !selected?.configured"
-          @click="runTest()"
-        >
-          {{ testing ? __('Testing…') : __('Test connection') }}
-        </button>
-        <a class="asdevs-ai-link" :href="settings.connectors_url">{{ __('Manage connectors') }}</a>
+        <span class="asdevs-ai-settings__toast-icon" aria-hidden="true">
+          <svg v-if="toast.ok" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M20 7 10.5 16.5 5 11"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none">
+            <path d="M12 8v5.25M12 16.5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path
+              d="M10.29 4.86 2.82 17.5A1.8 1.8 0 0 0 4.36 20.2h15.28a1.8 1.8 0 0 0 1.54-2.7L13.71 4.86a1.8 1.8 0 0 0-3.42 0Z"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <p class="asdevs-ai-settings__toast-title">{{ toast.title }}</p>
       </div>
-    </form>
 
-    <p v-else class="asdevs-ai-note asdevs-ai-note--bad">{{ state.settingsError || __('Settings are unavailable.') }}</p>
+      <div v-if="settings.providers.length === 0" class="asdevs-ai-settings__empty">
+        <p>{{ __('No AI connectors are active. Add one under Settings → Connectors, then come back.') }}</p>
+        <a class="asdevs-ai-btn asdevs-ai-btn--primary" :href="settings.connectors_url">
+          {{ __('Open Connectors') }}
+        </a>
+      </div>
+
+      <template v-else>
+        <div
+          class="asdevs-ai-settings__providers"
+          role="radiogroup"
+          :aria-label="__('AI connector')"
+          :aria-busy="listBusy"
+          :class="{ 'is-busy': listBusy }"
+        >
+          <div v-if="listBusy" class="asdevs-ai-settings__providers-overlay">
+            <DotsLoader :size="36" />
+            <span class="asdevs-ai-sr">{{ __('Working…') }}</span>
+          </div>
+
+          <label
+            v-for="item in settings.providers"
+            :key="item.id"
+            class="asdevs-ai-settings__provider"
+            :for="`asdevs-ai-panel-provider-${item.id}`"
+          >
+            <input
+              :id="`asdevs-ai-panel-provider-${item.id}`"
+              type="radio"
+              name="asdevs-ai-panel-provider"
+              :value="item.id"
+              :checked="settings.provider === item.id"
+              :disabled="listBusy"
+              @change="selectProvider(item.id)"
+            />
+            <span class="asdevs-ai-settings__provider-face">
+              <span class="asdevs-ai-settings__provider-radio" aria-hidden="true"></span>
+              <span class="asdevs-ai-settings__provider-name">{{ item.label }}</span>
+              <button
+                type="button"
+                class="asdevs-ai-settings__test"
+                :disabled="listBusy || !item.configured"
+                @click="runTest(item.id, $event)"
+              >
+                {{ testingId === item.id ? __('Testing…') : __('Test') }}
+              </button>
+              <span
+                class="asdevs-ai-settings__provider-status"
+                :class="item.configured ? 'is-ready' : 'is-pending'"
+              >
+                <span class="asdevs-ai-settings__provider-status-dot" aria-hidden="true"></span>
+                {{ item.configured ? __('Ready') : __('Needs key') }}
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div class="asdevs-ai-settings__actions">
+          <a class="asdevs-ai-link" :href="settings.connectors_url">
+            {{ __('Manage keys in Connectors') }}
+          </a>
+        </div>
+      </template>
+    </div>
+
+    <p v-else class="asdevs-ai-note asdevs-ai-note--bad">
+      {{ state.settingsError || __('Settings are unavailable.') }}
+    </p>
   </div>
 </template>

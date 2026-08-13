@@ -41,22 +41,44 @@ let engine: Engine | null = null;
 let engineRequest: Promise<Engine> | null = null;
 
 function loadEngine(): Promise<Engine> {
+  if (engine) {
+    state.engineReady = true;
+    state.engineError = '';
+
+    return Promise.resolve(engine);
+  }
+
   if (!engineRequest) {
+    state.engineReady = false;
+    state.engineError = '';
+
     engineRequest = import('./agent/engine')
       .then((loaded) => {
         engine = loaded;
+        state.engineReady = true;
+        state.engineError = '';
 
         return loaded;
       })
       .catch((error: unknown) => {
         // A failed chunk must not poison every later attempt.
         engineRequest = null;
+        state.engineReady = false;
+        state.engineError =
+          (error as Error).message || __('The assistant engine could not be loaded.');
 
         throw error;
       });
   }
 
   return engineRequest;
+}
+
+/** Retry a failed engine download (composer / chips stay blocked until it lands). */
+export function retryEngine(): void {
+  void loadEngine().catch(() => {
+    // state.engineError already carries the reason.
+  });
 }
 
 type View = 'chat' | 'settings' | 'skills';
@@ -70,6 +92,10 @@ interface State {
   loadError: string;
   loading: boolean;
   busy: boolean;
+  /** Agent SDK chunk has finished loading — send stays blocked until then. */
+  engineReady: boolean;
+  /** Why the deferred engine chunk failed, when it did. */
+  engineError: string;
   view: View;
   bubbles: Bubble[];
   messages: Message[];
@@ -120,6 +146,8 @@ export const state = reactive<State>({
   loadError: '',
   loading: true,
   busy: false,
+  engineReady: false,
+  engineError: '',
   view: 'chat',
   bubbles: [],
   messages: [],
@@ -303,14 +331,15 @@ export function open(): void {
     return;
   }
 
-  // Fetch the agent engine while they are still reading or typing, so sending
-  // the first message rarely has to wait for it.
+  // Fetch the agent engine while they browse the panel. Send stays disabled
+  // until it lands — the composer must not look ready and then fail.
   void loadEngine().catch(() => {
-    // Nothing to say yet — the run itself reports a failure it cannot recover.
+    // state.engineError surfaces under the composer.
   });
 
-  // Retry when the first bootstrap failed or the connector still looked missing —
-  // credentials may have been saved since the page loaded.
+  // Bootstrap (and the start chips) wait until the window is opened — most admin
+  // page views never touch the assistant. Retry when an earlier attempt failed
+  // or the connector still looked missing; credentials may have been saved since.
   if (state.loading || state.loadError !== '' || !state.ready) {
     void load();
   }
@@ -621,42 +650,53 @@ export async function loadSettings(): Promise<void> {
   }
 }
 
-/** Remember which WordPress connector the assistant should prefer. */
-export function chooseProvider(id: string): void {
-  if (!state.settings) {
+/** Persist the preferred connector and refresh readiness. */
+async function persistProvider(id: string): Promise<void> {
+  if (!state.settings || state.settingsBusy || id === '') {
     return;
   }
 
+  const previous = state.settings.provider;
   state.settings.provider = id;
-  state.settingsSaved = false;
-}
-
-export async function saveSettings(): Promise<void> {
-  if (!state.settings || state.settingsBusy) {
-    return;
-  }
-
-  state.settingsBusy = true;
   state.settingsError = '';
   state.settingsSaved = false;
+  state.settingsBusy = true;
 
   try {
-    state.settings = await api.saveSettings({
-      provider: state.settings.provider,
-    });
-
+    state.settings = await api.saveSettings({ provider: id });
     state.settingsSaved = true;
     state.ready = state.settings.ready;
     state.readyDetail = state.settings.ready ? '' : state.readyDetail;
     state.loadError = '';
     applyModels(state.settings.provider, state.settings.models ?? []);
-
     void load();
   } catch (error) {
+    if (state.settings) {
+      state.settings.provider = previous;
+    }
     state.settingsError = (error as Error).message;
+    state.settingsSaved = false;
   } finally {
     state.settingsBusy = false;
   }
+}
+
+/** Select a WordPress connector and persist it immediately. */
+export async function chooseProvider(id: string): Promise<void> {
+  if (!state.settings || id === state.settings.provider) {
+    return;
+  }
+
+  await persistProvider(id);
+}
+
+/** Persist the currently selected connector. */
+export async function saveSettings(): Promise<void> {
+  if (!state.settings) {
+    return;
+  }
+
+  await persistProvider(state.settings.provider);
 }
 
 /** Probe the preferred connector with a short prompt. */
@@ -769,7 +809,7 @@ export async function send(
   const prepared = applySlashSkills(text.trim());
   const trimmed = prepared.text;
 
-  if ((trimmed === '' && files.length === 0) || state.busy) {
+  if ((trimmed === '' && files.length === 0) || state.busy || !state.engineReady) {
     return;
   }
 
@@ -845,7 +885,7 @@ function applySlashSkills(text: string): { text: string } {
 
 /** Retry the last thing that was asked, without making them type it again. */
 export async function retry(): Promise<void> {
-  if (state.busy || state.lastPrompt === '') {
+  if (state.busy || state.lastPrompt === '' || !state.engineReady) {
     return;
   }
 
@@ -1057,11 +1097,23 @@ async function run(resume: RunState<unknown, Agent<unknown, 'text'>> | null = nu
     }
   } catch (error) {
     if ((error as Error).name !== 'AbortError') {
+      const detail = (error as Error).message || '';
+      const engineFail = /Failed to fetch dynamically imported module|Loading chunk|importing a module script/i.test(
+        detail
+      );
+
       answer.error = {
-        message: __('Something interrupted the reply. We can try again.'),
-        detail: (error as Error).message,
+        message: engineFail
+          ? __('The assistant engine could not be loaded. Try again.')
+          : __('Something interrupted the reply. We can try again.'),
+        detail,
         retryable: true,
       };
+
+      if (engineFail) {
+        state.engineReady = false;
+        state.engineError = detail || __('The assistant engine could not be loaded.');
+      }
     }
   } finally {
     state.busy = false;

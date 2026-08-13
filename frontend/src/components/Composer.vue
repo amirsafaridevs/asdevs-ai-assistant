@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { __, boot } from '../api';
-import { cancel, show } from '../assistant';
+import { cancel, retryEngine, show } from '../assistant';
 import type { ModelInfo, Skill } from '../types';
 
 export type AgentMode = 'agent' | 'ask';
@@ -21,6 +21,10 @@ export interface ComposerAttachment {
 const props = defineProps<{
   modelValue: string;
   busy: boolean;
+  /** False while the deferred agent engine chunk is still downloading. */
+  engineReady?: boolean;
+  /** Set when that download failed — shown under the composer with a retry. */
+  engineError?: string;
   skills?: Skill[];
   activeSkills?: string[];
   /** Active skills the assistant chose for itself, marked so they read as its doing. */
@@ -102,8 +106,17 @@ const slashMatches = computed(() => {
 
 const showSlash = computed(() => slashMatches.value.length > 0);
 
+const engineReady = computed(() => props.engineReady !== false);
+const engineError = computed(() => props.engineError ?? '');
+
 const canSend = computed(
-  () => props.modelValue.trim().length > 0 || attachments.value.some((item) => item.status !== 'failed')
+  () =>
+    engineReady.value &&
+    (props.modelValue.trim().length > 0 || attachments.value.some((item) => item.status !== 'failed'))
+);
+
+const inputPlaceholder = computed(() =>
+  engineReady.value ? __('Tell me what you need') : __('Preparing the assistant…')
 );
 
 const agentLabel = computed(() => (agent.value === 'agent' ? __('Agent') : __('Ask')));
@@ -449,7 +462,7 @@ async function buildPayload(
 }
 
 async function submit(): Promise<void> {
-  if (props.busy || !canSend.value) {
+  if (props.busy || !engineReady.value || !canSend.value) {
     return;
   }
 
@@ -645,7 +658,8 @@ defineExpose({
         class="asdevs-ai-composer__input"
         rows="1"
         :value="modelValue"
-        :placeholder="__('Tell me what you need')"
+        :placeholder="inputPlaceholder"
+        :aria-busy="!engineReady"
         @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
         @keydown="onKeydown"
       ></textarea>
@@ -823,6 +837,12 @@ defineExpose({
           </svg>
         </button>
 
+        <span
+          v-if="!engineReady && !busy"
+          class="asdevs-ai-composer__pulse"
+          aria-hidden="true"
+        ></span>
+
         <button
           v-if="busy"
           type="button"
@@ -838,8 +858,8 @@ defineExpose({
           type="submit"
           class="asdevs-ai-send"
           :disabled="!canSend"
-          :aria-label="__('Send')"
-          :title="__('Send')"
+          :aria-label="engineReady ? __('Send') : __('Preparing the assistant')"
+          :title="engineReady ? __('Send') : __('Preparing the assistant')"
         >
           <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
             <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -848,6 +868,15 @@ defineExpose({
       </div>
     </div>
 
-    <p v-if="voiceError" class="asdevs-ai-composer__hint asdevs-ai-note--bad">{{ voiceError }}</p>
+    <p v-if="engineError" class="asdevs-ai-composer__hint asdevs-ai-note--bad">
+      {{ engineError }}
+      <button type="button" class="asdevs-ai-composer__retry" @click="retryEngine()">
+        {{ __('Try again') }}
+      </button>
+    </p>
+    <p v-else-if="!engineReady" class="asdevs-ai-composer__hint" role="status">
+      {{ __('Preparing the assistant…') }}
+    </p>
+    <p v-else-if="voiceError" class="asdevs-ai-composer__hint asdevs-ai-note--bad">{{ voiceError }}</p>
   </form>
 </template>

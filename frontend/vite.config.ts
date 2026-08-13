@@ -7,8 +7,12 @@ import { resolve } from 'node:path';
 //
 // The output is a module rather than an IIFE for one reason: an IIFE cannot be
 // code-split, so the OpenAI Agents SDK would be inlined into the script every
-// admin page loads. As a module, the SDK lives in agent-engine.js and is
-// fetched only when someone opens the assistant.
+// admin page loads. As a module, the SDK lives in agent-*.js and is fetched
+// only when someone opens the assistant.
+//
+// Shared app modules (api, i18n helpers, …) must NOT stay inside main.js when
+// the agent chunk needs them. WordPress loads main.js?ver=…; a chunk that
+// `import`s ./main.js would load a second module instance and remount the UI.
 export default defineConfig({
   plugins: [vue()],
   // A library build gets no environment injected, but Vue's runtime still
@@ -32,10 +36,31 @@ export default defineConfig({
         format: 'es',
         assetFileNames: 'main.css',
         entryFileNames: 'main.js',
-        // Deferred chunks are content-hashed. Only main.js is named by the PHP
-        // side; these are reached through the module graph, so a hash is both
-        // safe and the better cache key.
         chunkFileNames: 'agent-[hash].js',
+        manualChunks(id) {
+          const normalized = id.replace(/\\/g, '/');
+
+          // Keep the OpenAI stack in the deferred agent chunk graph.
+          if (
+            normalized.includes('/node_modules/@openai/') ||
+            normalized.includes('/node_modules/openai/')
+          ) {
+            return 'agent-vendor';
+          }
+
+          // Anything the deferred engine also needs must live outside main.js so
+          // chunks never `import "./main.js"` (see file header).
+          if (
+            normalized.includes('/frontend/src/api.ts') ||
+            normalized.includes('/frontend/src/types.ts') ||
+            normalized.includes('/frontend/src/markdown.ts') ||
+            normalized.includes('/frontend/src/agent/')
+          ) {
+            return 'shared';
+          }
+
+          return undefined;
+        },
       },
     },
   },

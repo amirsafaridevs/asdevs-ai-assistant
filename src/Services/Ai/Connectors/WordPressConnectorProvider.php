@@ -287,19 +287,32 @@ final class WordPressConnectorProvider implements AiProvider {
 		$result = $builder->generate_text_result();
 
 		if ( is_wp_error( $result ) ) {
-			$status = (int) ( $result->get_error_data()['status'] ?? 0 );
+			$status  = (int) ( $result->get_error_data()['status'] ?? 0 );
+			$code    = $result->get_error_code();
+			$raw     = $result->get_error_message();
+			$message = $this->user_message_for_error( $code, $status );
+
+			// A sibling plugin hooked wp_ai_client_prevent_prompt and refused every
+			// prompt. Surface that clearly — the generic “couldn’t reach” line looks
+			// like a network failure and hides the real cause.
+			if ( 'prompt_prevented' === $code || str_contains( $raw, 'prevented by a filter' ) ) {
+				$message = __(
+					'Another plugin is blocking WordPress AI requests. Check ASDevs Guardian → AI Assistant, or any plugin that filters wp_ai_client_prevent_prompt.',
+					'asdevs-ai-assistant'
+				);
+			}
 
 			if ( in_array( $status, array( 401, 403 ), true ) ) {
 				throw new AiUnavailable(
-					esc_html( $this->user_message_for_error( $result->get_error_code(), $status ) ),
-					esc_html( $result->get_error_message() ),
+					esc_html( $message ),
+					esc_html( $raw ),
 					false
 				);
 			}
 
 			throw new AiUnavailable(
-				esc_html( $this->user_message_for_error( $result->get_error_code(), $status ) ),
-				esc_html( $result->get_error_message() ),
+				esc_html( $message ),
+				esc_html( $raw ),
 				true
 			);
 		}
